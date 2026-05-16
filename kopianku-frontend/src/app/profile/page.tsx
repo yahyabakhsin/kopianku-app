@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,11 +8,53 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Settings, MapPin, Link as LinkIcon, Calendar, Star, Coffee, FolderHeart, Activity, Gift } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { dummyCafes } from "@/features/cafes/data/dummy";
 import { CafeCard } from "@/features/cafes/components/CafeCard";
+import { apiClient } from "@/lib/axios";
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState("showcase");
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [topCafes, setTopCafes] = useState<any[]>([]);
+  const [albums, setAlbums] = useState<any[]>([]);
+  const [reservations, setReservations] = useState<any[]>([]);
+  const [wishlist, setWishlist] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const headers = { Authorization: `Bearer ${token}` };
+        
+        const [profileRes, actRes, topRes, albumRes, resvRes, wishlistRes] = await Promise.all([
+          apiClient.get('/users/me', { headers }),
+          apiClient.get('/users/me/activities', { headers }),
+          apiClient.get('/users/me/top-cafes', { headers }),
+          apiClient.get('/albums', { headers }),
+          apiClient.get('/users/me/reservations', { headers }),
+          apiClient.get('/users/me/wishlist', { headers })
+        ]);
+
+        setUserProfile(profileRes.data);
+        setActivities(actRes.data);
+        setTopCafes(topRes.data);
+        setAlbums(albumRes.data);
+        setReservations(resvRes.data);
+        setWishlist(wishlistRes.data);
+      } catch (error) {
+        console.error("Gagal load profile", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfileData();
+  }, []);
+
+  if (loading) return <div className="p-10 text-center">Loading profile...</div>;
+  if (!userProfile) return <div className="p-10 text-center">Lo belum login bang!</div>;
 
   return (
     <div className="min-h-screen bg-zinc-50 pb-20">
@@ -43,39 +85,48 @@ export default function ProfilePage() {
               <Button className="rounded-full bg-black hover:bg-zinc-800 text-white">
                 <Settings className="w-4 h-4 mr-2" /> Edit Profil
               </Button>
+              <Button 
+                variant="destructive" 
+                className="rounded-full font-semibold bg-red-500 hover:bg-red-600"
+                onClick={() => {
+                  localStorage.removeItem("token");
+                  window.location.href = "/";
+                }}
+              >
+                Logout
+              </Button>
             </div>
           </div>
 
           {/* Bio & Stats */}
           <div className="max-w-2xl">
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-              Nadia Kusuma 
-              <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none">WFC Warrior</Badge>
+              {userProfile.username} 
+              <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none">{userProfile.persona || 'Newbie'}</Badge>
             </h1>
-            <p className="text-zinc-500 font-medium mb-3">@nadiaksm • Bergabung sejak 2024</p>
+            <p className="text-zinc-500 font-medium mb-3">{userProfile.email} • Bergabung sejak 2024</p>
             
             <p className="text-zinc-700 leading-relaxed mb-4">
-              Mencari colokan dan Wi-Fi kencang di seluruh penjuru Jakarta. Pecinta kopi susu gula aren sejati. ☕️💻
+              {userProfile.preferences?.join(", ") || "Belum ada preferensi. Coba isi onboarding lagi."}
             </p>
 
             <div className="flex flex-wrap gap-4 text-sm text-zinc-600 font-medium">
-              <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> Jakarta Selatan</span>
-              <span className="flex items-center gap-1"><LinkIcon className="w-4 h-4" /> bento.me/nadia</span>
-              <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> 42 Check-ins</span>
+              <span className="flex items-center gap-1"><MapPin className="w-4 h-4" /> Indonesia</span>
+              <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {userProfile.stats?.checkins_count || 0} Check-ins</span>
             </div>
 
             {/* Followers / Following */}
             <div className="flex gap-6 mt-6">
               <div className="flex flex-col">
-                <span className="font-bold text-lg text-black">128</span>
+                <span className="font-bold text-lg text-black">{userProfile.stats?.followers || 0}</span>
                 <span className="text-sm text-zinc-500 font-medium">Pengikut</span>
               </div>
               <div className="flex flex-col">
-                <span className="font-bold text-lg text-black">245</span>
+                <span className="font-bold text-lg text-black">{userProfile.stats?.following || 0}</span>
                 <span className="text-sm text-zinc-500 font-medium">Mengikuti</span>
               </div>
               <div className="flex flex-col">
-                <span className="font-bold text-lg text-black">15</span>
+                <span className="font-bold text-lg text-black">{userProfile.stats?.reviews_count || 0}</span>
                 <span className="text-sm text-zinc-500 font-medium">Review</span>
               </div>
             </div>
@@ -106,7 +157,7 @@ export default function ProfilePage() {
         </Card>
 
         {/* Custom Tabs List */}
-        <div className="flex overflow-x-auto border-b border-zinc-200 mb-8 gap-8">
+        <div className="flex overflow-x-auto border-b border-zinc-200 mb-8 gap-8 hide-scrollbar">
           <button 
             onClick={() => setActiveTab("showcase")}
             className={`whitespace-nowrap pb-4 font-semibold text-sm border-b-2 transition-colors ${activeTab === "showcase" ? "border-black text-black" : "border-transparent text-zinc-500 hover:text-black"}`}
@@ -120,10 +171,22 @@ export default function ProfilePage() {
             Album Saya
           </button>
           <button 
+            onClick={() => setActiveTab("wishlist")}
+            className={`whitespace-nowrap pb-4 font-semibold text-sm border-b-2 transition-colors ${activeTab === "wishlist" ? "border-black text-black" : "border-transparent text-zinc-500 hover:text-black"}`}
+          >
+            Wishlist
+          </button>
+          <button 
             onClick={() => setActiveTab("activity")}
             className={`whitespace-nowrap pb-4 font-semibold text-sm border-b-2 transition-colors ${activeTab === "activity" ? "border-black text-black" : "border-transparent text-zinc-500 hover:text-black"}`}
           >
             Aktivitas & Review
+          </button>
+          <button 
+            onClick={() => setActiveTab("reservations")}
+            className={`whitespace-nowrap pb-4 font-semibold text-sm border-b-2 transition-colors ${activeTab === "reservations" ? "border-black text-black" : "border-transparent text-zinc-500 hover:text-black"}`}
+          >
+            Reservasi Room
           </button>
         </div>
         
@@ -139,7 +202,7 @@ export default function ProfilePage() {
               </Button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {dummyCafes.map((cafe) => (
+              {topCafes.map((cafe) => (
                 <CafeCard key={cafe.id} cafe={cafe} />
               ))}
             </div>
@@ -150,16 +213,18 @@ export default function ProfilePage() {
         {activeTab === "albums" && (
           <div className="animate-in fade-in duration-500">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              <Link href="/albums/a1" className="group cursor-pointer block">
-                <div className="relative aspect-[4/3] rounded-[2rem] overflow-hidden mb-4 bg-zinc-100 border border-zinc-200">
-                  <Image src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=400" alt="cover" fill className="object-cover transition-transform duration-500 group-hover:scale-105" />
-                  <div className="absolute inset-0 bg-black/20" />
-                  <div className="absolute bottom-4 left-4 text-white">
-                    <h3 className="font-bold text-lg">WFC Jaksel Andalan</h3>
-                    <p className="text-sm opacity-90 flex items-center gap-1"><Coffee className="w-3.5 h-3.5"/> 2 Spot</p>
+              {albums.map((album) => (
+                <Link href={`/albums/${album.id}`} key={album.id} className="group cursor-pointer block">
+                  <div className="relative aspect-[4/3] rounded-[2rem] overflow-hidden mb-4 bg-zinc-100 border border-zinc-200">
+                    <Image src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=400" alt="cover" fill className="object-cover transition-transform duration-500 group-hover:scale-105" />
+                    <div className="absolute inset-0 bg-black/20" />
+                    <div className="absolute bottom-4 left-4 text-white">
+                      <h3 className="font-bold text-lg">{album.title}</h3>
+                      <p className="text-sm opacity-90 flex items-center gap-1"><Coffee className="w-3.5 h-3.5"/> {album.cafe_count} Spot</p>
+                    </div>
                   </div>
-                </div>
-              </Link>
+                </Link>
+              ))}
 
               <div className="group cursor-pointer block flex items-center justify-center border-2 border-dashed border-zinc-200 hover:border-amber-500 rounded-[2rem] aspect-[4/3] bg-zinc-50 transition-colors">
                 <div className="text-center text-zinc-500 group-hover:text-amber-600 transition-colors">
@@ -196,36 +261,30 @@ export default function ProfilePage() {
 
               {/* Activity Feed (Right) */}
               <div className="flex-1 space-y-6">
-                {[
-                  { type: "review", cafe: "15th Coffee Kemang", rating: 5, date: "2 hari yang lalu", text: "Spot WFC favorit baru! Wi-Finya stabil banget. Colokan ada di setiap meja deket tembok." },
-                  { type: "checkin", cafe: "Titik Temu Senopati", date: "Minggu lalu", text: "Checked in at Titik Temu Senopati with 2 friends." },
-                  { type: "album", cafe: "Toko Kopi Tuku", date: "2 minggu lalu", text: "Menambahkan Toko Kopi Tuku ke album 'Kopi Susu Creamy'." }
-                ].map((item, idx) => (
+                {activities.length === 0 && <p className="text-zinc-500">Belum ada aktivitas nih. Mulai explore kafe yuk!</p>}
+                {activities.map((item, idx) => (
                   <Card key={idx} className="rounded-2xl border-none shadow-sm bg-white p-6">
                     <div className="flex items-start gap-4">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                        item.type === 'review' ? 'bg-amber-100 text-amber-600' :
-                        item.type === 'checkin' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
+                        item.type === 'review' ? 'bg-amber-100 text-amber-600' : 'bg-purple-100 text-purple-600'
                       }`}>
-                        {item.type === 'review' && <Star className="w-5 h-5 fill-amber-600" />}
-                        {item.type === 'checkin' && <MapPin className="w-5 h-5" />}
-                        {item.type === 'album' && <FolderHeart className="w-5 h-5" />}
+                        {item.type === 'review' ? <Star className="w-5 h-5 fill-amber-600" /> : <MapPin className="w-5 h-5" />}
                       </div>
                       
                       <div className="flex-1">
                         <div className="flex justify-between items-start mb-1">
                           <h4 className="font-bold text-base">
-                            {item.type === 'review' && `Mereview ${item.cafe}`}
-                            {item.type === 'checkin' && `Check-in di ${item.cafe}`}
-                            {item.type === 'album' && `Menyimpan ${item.cafe}`}
+                            <Link href={`/cafe/${item.cafe_id}`} className="hover:underline hover:text-amber-600">
+                              {item.type === 'review' ? `Mereview ${item.cafe_name}` : `Check-in di ${item.cafe_name}`}
+                            </Link>
                           </h4>
-                          <span className="text-xs text-zinc-400 font-medium">{item.date}</span>
+                          <span className="text-xs text-zinc-400 font-medium">{item.date_str}</span>
                         </div>
                         
                         {item.type === 'review' && (
                           <div className="flex items-center gap-1 mb-2">
                             {[...Array(5)].map((_, i) => (
-                              <Star key={i} className={`w-3.5 h-3.5 ${i < item.rating! ? 'fill-amber-400 text-amber-400' : 'fill-zinc-200 text-zinc-200'}`} />
+                              <Star key={i} className={`w-3.5 h-3.5 ${i < item.rating ? 'fill-amber-400 text-amber-400' : 'fill-zinc-200 text-zinc-200'}`} />
                             ))}
                           </div>
                         )}
@@ -237,6 +296,68 @@ export default function ProfilePage() {
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Wishlist */}
+        {activeTab === "wishlist" && (
+          <div className="animate-in fade-in duration-500">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <Heart className="w-5 h-5 text-red-500" /> Wishlist Lo
+              </h3>
+            </div>
+            {wishlist.length === 0 ? (
+               <p className="text-zinc-500">Belum ada kafe yang lo simpan. Pencet tombol love di detail kafe!</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {wishlist.map((cafe) => (
+                  <CafeCard key={cafe.id} cafe={cafe} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Reservations */}
+        {activeTab === "reservations" && (
+          <div className="animate-in fade-in duration-500">
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-blue-600" /> Riwayat Booking Meeting Room
+            </h3>
+            {reservations.length === 0 ? (
+               <p className="text-zinc-500">Lo belum pernah booking meeting room.</p>
+            ) : (
+              <div className="space-y-4 max-w-4xl">
+                {reservations.map((res: any) => (
+                  <Card key={res.id} className="rounded-2xl border-none shadow-sm overflow-hidden flex flex-col md:flex-row">
+                    <div className="w-full md:w-48 h-32 md:h-auto bg-zinc-100 relative shrink-0">
+                      <Image 
+                        src={res.cafe_image || "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80"} 
+                        alt="cafe" fill className="object-cover"
+                      />
+                    </div>
+                    <CardContent className="p-6 flex-1 flex flex-col justify-center">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <Badge variant="outline" className={`mb-2 border-none ${res.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                            {res.status.toUpperCase()}
+                          </Badge>
+                          <h4 className="font-bold text-lg">{res.cafe_name}</h4>
+                        </div>
+                        <div className="text-right">
+                           <span className="text-sm font-bold block">{res.booking_date}</span>
+                           <span className="text-sm text-zinc-500">{res.start_time.slice(0,5)} - {res.end_time.slice(0,5)}</span>
+                        </div>
+                      </div>
+                      <p className="text-zinc-500 text-sm mt-2 flex items-center gap-2">
+                         <Users className="w-4 h-4"/> Untuk {res.guest_count} orang
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

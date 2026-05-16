@@ -1,58 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Coffee, FolderHeart, Share2, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-
-// Dummy data for albums
-const dummyAlbums = [
-  {
-    id: "a1",
-    title: "WFC Jaksel Andalan",
-    count: 12,
-    isPublic: true,
-    images: [
-      "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=400",
-      "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=400",
-      "https://images.unsplash.com/photo-1559925393-8be0ec4767c8?auto=format&fit=crop&q=80&w=400"
-    ]
-  },
-  {
-    id: "a2",
-    title: "Hidden Gem Estetik",
-    count: 8,
-    isPublic: false,
-    images: [
-      "https://images.unsplash.com/photo-1600093463592-8e36ae95ef56?auto=format&fit=crop&q=80&w=400",
-      "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?auto=format&fit=crop&q=80&w=400",
-    ]
-  },
-  {
-    id: "a3",
-    title: "Kopi Susu Creamy",
-    count: 24,
-    isPublic: true,
-    images: [
-      "https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=400",
-    ]
-  }
-];
+import { apiClient } from "@/lib/axios";
 
 export default function AlbumsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState("");
+  const [albums, setAlbums] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleCreateAlbum = (e: React.FormEvent) => {
+  const fetchAlbums = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const res = await apiClient.get('/albums', { headers: { Authorization: `Bearer ${token}` } });
+      setAlbums(res.data);
+    } catch (error) {
+      console.error("Gagal load album", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAlbums();
+  }, []);
+
+  const handleCreateAlbum = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAlbumName.trim()) return;
     
-    // In a real app, we'd add it to state or send to backend
-    alert(`Album "${newAlbumName}" berhasil dibuat! (Dummy)`);
-    setNewAlbumName("");
-    setIsModalOpen(false);
+    try {
+      const token = localStorage.getItem("token");
+      await apiClient.post('/albums', { title: newAlbumName, is_public: true }, { headers: { Authorization: `Bearer ${token}` } });
+      setNewAlbumName("");
+      setIsModalOpen(false);
+      fetchAlbums();
+    } catch (error) {
+      console.error("Gagal bikin album", error);
+      alert("Gagal bikin album bang!");
+    }
   };
 
   return (
@@ -85,67 +77,50 @@ export default function AlbumsPage() {
       <div className="container mx-auto max-w-screen-xl px-4 md:px-8 py-12">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
           
-          {dummyAlbums.map((album) => (
-            <Link key={album.id} href={`/albums/${album.id}`} className="group cursor-pointer block">
-              {/* Album Cover Grid */}
-              <div className="relative aspect-[4/3] rounded-[2rem] overflow-hidden mb-4 bg-zinc-100 border border-zinc-200 transition-transform duration-300 group-hover:-translate-y-2 group-hover:shadow-xl">
-                {album.images.length >= 3 ? (
-                  <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-1 p-1">
-                    <div className="relative col-span-1 row-span-2 rounded-xl overflow-hidden">
-                      <Image src={album.images[0]} alt="cover 1" fill className="object-cover" />
-                    </div>
-                    <div className="relative rounded-xl overflow-hidden">
-                      <Image src={album.images[1]} alt="cover 2" fill className="object-cover" />
-                    </div>
-                    <div className="relative rounded-xl overflow-hidden">
-                      <Image src={album.images[2]} alt="cover 3" fill className="object-cover" />
-                    </div>
-                  </div>
-                ) : album.images.length === 2 ? (
-                  <div className="absolute inset-0 grid grid-cols-2 gap-1 p-1">
-                    <div className="relative rounded-xl overflow-hidden">
-                      <Image src={album.images[0]} alt="cover 1" fill className="object-cover" />
-                    </div>
-                    <div className="relative rounded-xl overflow-hidden">
-                      <Image src={album.images[1]} alt="cover 2" fill className="object-cover" />
-                    </div>
-                  </div>
-                ) : (
+          {loading && <p className="text-zinc-500">Memuat album...</p>}
+          {!loading && albums.length === 0 && <p className="text-zinc-500">Lo belum punya album. Bikin satu yuk!</p>}
+          {albums.map((album) => {
+            // Kita pakai gambar placeholder karena backend belum ada relasi gambar album utuh
+            const images = ["https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=400"];
+            return (
+              <Link key={album.id} href={`/albums/${album.id}`} className="group cursor-pointer block">
+                {/* Album Cover Grid */}
+                <div className="relative aspect-[4/3] rounded-[2rem] overflow-hidden mb-4 bg-zinc-100 border border-zinc-200 transition-transform duration-300 group-hover:-translate-y-2 group-hover:shadow-xl">
                   <div className="absolute inset-0 p-1">
                     <div className="relative w-full h-full rounded-xl overflow-hidden">
-                      <Image src={album.images[0]} alt="cover 1" fill className="object-cover" />
+                      <Image src={images[0]} alt="cover 1" fill className="object-cover" />
                     </div>
                   </div>
-                )}
-                
-                {/* Overlay Hover Effect */}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center">
-                  <div className="opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
-                    <Button variant="secondary" className="rounded-full font-bold shadow-lg pointer-events-none">
-                      Buka Album
-                    </Button>
+                  
+                  {/* Overlay Hover Effect */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center">
+                    <div className="opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
+                      <Button variant="secondary" className="rounded-full font-bold shadow-lg pointer-events-none">
+                        Buka Album
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Album Info */}
-              <div className="flex items-start justify-between px-2">
-                <div>
-                  <h3 className="text-lg font-bold group-hover:text-amber-600 transition-colors">{album.title}</h3>
-                  <div className="flex items-center gap-3 text-sm text-zinc-500 mt-1">
-                    <span className="flex items-center gap-1"><Coffee className="w-3.5 h-3.5" /> {album.count} Spot</span>
-                    <span>•</span>
-                    <span className="font-medium">{album.isPublic ? "Publik" : "Privat"}</span>
+                {/* Album Info */}
+                <div className="flex items-start justify-between px-2">
+                  <div>
+                    <h3 className="text-lg font-bold group-hover:text-amber-600 transition-colors">{album.title}</h3>
+                    <div className="flex items-center gap-3 text-sm text-zinc-500 mt-1">
+                      <span className="flex items-center gap-1"><Coffee className="w-3.5 h-3.5" /> {album.cafe_count} Spot</span>
+                      <span>•</span>
+                      <span className="font-medium">{album.is_public ? "Publik" : "Privat"}</span>
+                    </div>
                   </div>
+                  {album.is_public && (
+                    <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-black pointer-events-none">
+                      <Share2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
-                {album.isPublic && (
-                  <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-black pointer-events-none">
-                    <Share2 className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-            </Link>
-          ))}
+              </Link>
+            )
+          })}
 
         </div>
       </div>

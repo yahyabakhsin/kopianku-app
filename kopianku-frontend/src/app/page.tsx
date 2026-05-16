@@ -12,46 +12,37 @@ import { CafeCard } from "@/features/cafes/components/CafeCard";
 import { apiClient } from "@/lib/axios";
 import { Cafe } from "@/features/cafes/types";
 
-// Mock Feed Data for Authenticated Home
-const feedPosts = [
-  {
-    id: "p1",
-    user: { name: "Bima Arya", persona: "Chill Seeker", avatar: "B" },
-    time: "Baru saja",
-    cafe: { name: "15th Coffee", location: "Kemang" },
-    rating: 5,
-    content: "Lagi sepi nih gengs! Yang mau nugas cepetan merapat, colokan di pojok masih kosong.",
-    likes: 12,
-    comments: 2
-  },
-  {
-    id: "p2",
-    user: { name: "Nadia Kusuma", persona: "WFC Warrior", avatar: "N" },
-    time: "2 jam yang lalu",
-    cafe: { name: "Titik Temu Coffee", location: "Senopati" },
-    rating: 4,
-    content: "Kopi susunya juara. Asik buat nongkrong ramean di outdoor.",
-    likes: 89,
-    comments: 5
-  }
-];
-
 export default function HomePage() {
-  // Menggunakan hooks Next.js untuk client component
-  const searchParams = useSearchParams();
-  const persona = searchParams.get("persona");
-  const isLogged = !!persona; // If persona exists in URL, we simulate logged-in state
-
-  // State untuk menyimpan data cafe dan status loading
   const [cafes, setCafes] = useState<Cafe[]>([]);
+  const [feedPosts, setFeedPosts] = useState<any[]>([]);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isLogged, setIsLogged] = useState(false);
 
   // Fetch data dari FastAPI
   useEffect(() => {
-    const fetchCafes = async () => {
+    const fetchData = async () => {
       try {
-        const response = await apiClient.get('/cafes');
-        setCafes(response.data);
+        const token = localStorage.getItem("token");
+        setIsLogged(!!token);
+        
+        // 1. Fetch Cafes
+        let cafesRes;
+        if (token) {
+          cafesRes = await apiClient.get('/cafes', { headers: { Authorization: `Bearer ${token}` } });
+          
+          // 2. Fetch User Profile
+          const userRes = await apiClient.get('/users/me', { headers: { Authorization: `Bearer ${token}` } });
+          setUserProfile(userRes.data);
+          
+          // 3. Fetch Feed
+          const feedRes = await apiClient.get('/feed');
+          setFeedPosts(feedRes.data);
+        } else {
+          cafesRes = await apiClient.get('/cafes');
+        }
+        
+        setCafes(cafesRes.data);
       } catch (error) {
         console.error("Gagal ambil data backend:", error);
       } finally {
@@ -59,12 +50,8 @@ export default function HomePage() {
       }
     };
 
-    if (isLogged) {
-      fetchCafes();
-    } else {
-      setLoading(false);
-    }
-  }, [isLogged]);
+    fetchData();
+  }, []);
 
   if (isLogged) {
     // ==========================================
@@ -78,7 +65,7 @@ export default function HomePage() {
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
             <div>
               <h1 className="text-3xl font-bold tracking-tight mb-2">
-                Halo, <span className="text-amber-600">Nadia!</span> 👋
+                Halo, <span className="text-amber-600">{userProfile?.username || 'User'}!</span> 👋
               </h1>
               <p className="text-zinc-500 font-medium text-lg">Siap cari tempat ngopi yang pas buat hari ini?</p>
             </div>
@@ -101,7 +88,7 @@ export default function HomePage() {
                     <Sparkles className="w-5 h-5 text-purple-500" /> Rekomendasi AI Buat Lo
                   </h2>
                   <Badge variant="secondary" className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-none">
-                    Berdasarkan: WFC Warrior
+                    Berdasarkan: {userProfile?.persona || "Coffee Explorer"}
                   </Badge>
                 </div>
                 
@@ -231,25 +218,20 @@ export default function HomePage() {
                     {loading ? (
                        <p className="text-xs text-zinc-500">Memuat data...</p>
                     ) : (
-                      // Mengambil sisa data cafe (dari index 2 sampai 5) buat nampilin daftar trending
-                      cafes.slice(2, 5).map((cafe, i) => {
-                        // Bikin random status rame buat simulasi UI aja
-                        const crowds = ["Rame", "Sedang", "Sepi"];
-                        const crowd = crowds[i % 3];
-                        
+                      // Mengurutkan cafe berdasarkan rating dan review count
+                      [...cafes].sort((a, b) => b.reviewCount - a.reviewCount).slice(0, 5).map((cafe, i) => {
                         return (
-                          <div key={cafe.id} className="flex justify-between items-center group cursor-pointer">
-                            <div>
-                              <p className="font-bold text-sm group-hover:text-amber-600 transition-colors truncate max-w-[150px]">{cafe.name}</p>
-                              <p className="text-xs text-zinc-500 truncate max-w-[150px]">{cafe.location}</p>
+                          <Link href={`/cafe/${cafe.id}`} key={cafe.id}>
+                            <div className="flex justify-between items-center group cursor-pointer mb-4">
+                              <div>
+                                <p className="font-bold text-sm group-hover:text-amber-600 transition-colors truncate max-w-[150px]">{cafe.name}</p>
+                                <p className="text-xs text-zinc-500 truncate max-w-[150px]">{cafe.location}</p>
+                              </div>
+                              <Badge variant="outline" className={`text-xs border-none bg-amber-50 text-amber-700`}>
+                                {cafe.reviewCount} Reviews
+                              </Badge>
                             </div>
-                            <Badge variant="outline" className={`text-xs border-none ${
-                              crowd === 'Sepi' ? 'bg-green-50 text-green-700' : 
-                              crowd === 'Rame' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
-                            }`}>
-                              {crowd}
-                            </Badge>
-                          </div>
+                          </Link>
                         )
                       })
                     )}
@@ -290,12 +272,78 @@ export default function HomePage() {
             Berhenti scrolling map berjam-jam. KopianKu pakai AI buat nyocokin selera kopi, kebutuhan fasilitas, dan estetika tempat yang lo mau.
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 w-full justify-center max-w-md">
-            <Link href="/onboarding" className="w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row gap-4 w-full justify-center max-w-md mb-8">
+            <Link href="/login" className="w-full sm:w-auto">
               <Button className="w-full h-14 px-8 text-base font-bold bg-black hover:bg-zinc-800 text-white rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-transform active:scale-95">
                 Cari Kafe Sekarang <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
+          </div>
+          
+          {/* Social Proof Stats */}
+          <div className="flex items-center gap-8 text-zinc-500 font-medium">
+             <div className="flex flex-col items-center"><span className="text-2xl font-bold text-black">10K+</span><span>Pengguna</span></div>
+             <div className="w-px h-8 bg-zinc-300"></div>
+             <div className="flex flex-col items-center"><span className="text-2xl font-bold text-black">5K+</span><span>Review Kafe</span></div>
+             <div className="w-px h-8 bg-zinc-300"></div>
+             <div className="flex flex-col items-center"><span className="text-2xl font-bold text-black">100+</span><span>Spot Terkurasi</span></div>
+          </div>
+        </div>
+      </section>
+
+      {/* Explore by Category Section */}
+      <section className="w-full py-20 bg-white border-t border-zinc-100">
+        <div className="container mx-auto px-4 max-w-screen-xl">
+          <div className="flex items-end justify-between mb-10">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">Explore by Category</h2>
+              <p className="text-zinc-500 font-medium">Temukan kafe sesuai kebutuhan spesifik lo.</p>
+            </div>
+            <Link href="/discover" className="hidden md:flex text-amber-600 font-bold items-center hover:underline">
+              Lihat Semua <ArrowRight className="w-4 h-4 ml-1" />
+            </Link>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {[
+              { name: "WFC Friendly", icon: <Coffee className="w-6 h-6 mb-3 text-blue-500" />, color: "bg-blue-50 border-blue-100" },
+              { name: "Cozy & Quiet", icon: <Sparkles className="w-6 h-6 mb-3 text-purple-500" />, color: "bg-purple-50 border-purple-100" },
+              { name: "Hidden Gem", icon: <MapPin className="w-6 h-6 mb-3 text-green-500" />, color: "bg-green-50 border-green-100" },
+              { name: "Meeting Room", icon: <Users className="w-6 h-6 mb-3 text-orange-500" />, color: "bg-orange-50 border-orange-100" },
+              { name: "Nongkrong Malam", icon: <Star className="w-6 h-6 mb-3 text-indigo-500" />, color: "bg-indigo-50 border-indigo-100" }
+            ].map((cat, i) => (
+              <Link href={`/discover?category=${encodeURIComponent(cat.name)}`} key={i}>
+                <div className={`p-6 rounded-[1.5rem] border ${cat.color} hover:shadow-md transition-all flex flex-col items-center justify-center text-center cursor-pointer group h-full`}>
+                  <div className="group-hover:scale-110 transition-transform">{cat.icon}</div>
+                  <span className="font-bold text-sm text-zinc-800">{cat.name}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Cafe Populer Minggu Ini Section */}
+      <section className="w-full py-20 bg-zinc-50 border-t border-zinc-100">
+        <div className="container mx-auto px-4 max-w-screen-xl">
+          <div className="flex items-end justify-between mb-10">
+            <div>
+              <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">Kafe Populer Minggu Ini</h2>
+              <p className="text-zinc-500 font-medium">Spot yang lagi rame diomongin sama anak-anak KopianKu.</p>
+            </div>
+            <Link href="/discover" className="hidden md:flex text-amber-600 font-bold items-center hover:underline">
+              Lihat Lebih Banyak <ArrowRight className="w-4 h-4 ml-1" />
+            </Link>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {loading ? (
+              <p className="text-zinc-500 col-span-full">Memuat kafe populer...</p>
+            ) : (
+              [...cafes].sort((a, b) => b.reviewCount - a.reviewCount).slice(0, 4).map((cafe) => (
+                <CafeCard key={cafe.id} cafe={cafe} />
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -304,8 +352,8 @@ export default function HomePage() {
       <section className="w-full py-20 bg-white">
         <div className="container mx-auto px-4 max-w-screen-xl">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">Fitur Andalan Kita</h2>
-            <p className="text-zinc-500 font-medium">Bukan sekadar directory kafe biasa.</p>
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">Preview AI Feature</h2>
+            <p className="text-zinc-500 font-medium">Bukan sekadar directory kafe biasa, KopianKu ditenagai AI buat personalisasi maksimal.</p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[280px]">

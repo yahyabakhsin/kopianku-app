@@ -1,388 +1,182 @@
-"use client";
-
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Clock, Users, CreditCard, CheckCircle2, ChevronRight, ShieldCheck, Receipt } from "lucide-react";
-import Link from "next/link";
+import { notFound } from "next/navigation";
 import Image from "next/image";
-import { useParams, useRouter } from "next/navigation";
-import axios from "axios"; // 1. Wajib import Axios
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { MapPin, Star, Sparkles, Wifi, Zap, Coffee, Camera, Wind, Sun, ShoppingBag, ArrowLeft, Share, Heart, MessageSquare, Users, CalendarDays, Brain } from "lucide-react";
+import Link from "next/link";
+import { CheckInModal } from "@/features/cafes/components/CheckInModal";
 
-export default function ReservationPage() {
-  const params = useParams();
-  const router = useRouter();
-  const id = params.id as string;
+import { WishlistButton } from "@/features/cafes/components/WishlistButton";
+
+const getIcon = (name?: string) => {
+  switch (name?.toLowerCase()) {
+    case 'wifi': return <Wifi className="w-5 h-5 mb-2" />;
+    case 'colokan': return <Zap className="w-5 h-5 mb-2" />;
+    case 'kopi': return <Coffee className="w-5 h-5 mb-2" />;
+    case 'estetik': return <Camera className="w-5 h-5 mb-2" />;
+    case 'outdoor': return <Wind className="w-5 h-5 mb-2" />;
+    case 'sun': return <Sun className="w-5 h-5 mb-2" />;
+    case 'meeting room': return <Users className="w-5 h-5 mb-2" />;
+    default: return <Sparkles className="w-5 h-5 mb-2" />;
+  }
+};
+
+export default async function CafeDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
   const baseId = id.replace("-copy", "");
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [formData, setFormData] = useState({
-    date: "",
-    time: "",
-    duration: "1",
-    guests: "2",
-    name: "Nadia Kusuma",
-    phone: "081234567890",
-    notes: ""
-  });
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [reservationData, setReservationData] = useState<any>(null); // State buat nangkep ID Reservasi dari Backend
+  let cafe = null;
+  try {
+    const res = await fetch(`http://localhost:8000/api/cafes/${baseId}`, { cache: 'no-store' });
+    if (!res.ok) {
+      if (res.status === 404) return notFound();
+      throw new Error(`Gagal narik data`);
+    }
+    cafe = await res.json();
+  } catch (error) {
+    console.error(error);
+    notFound(); 
+  }
 
-  // --- LOGIKA TOMBOL FORM SUBMIT ---
-  const handleNext = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Transisi Step 1 ke Step 2 (Pilih Metode Bayar)
-    if (step === 1) {
-      if (!formData.date || !formData.time) {
-         alert("Bang, pilih tanggal sama jamnya dulu dong!");
-         return;
-      }
-      setStep(2);
-    } 
-    // Transisi Step 2 ke Step 3 (Eksekusi API Booking!)
-    else if (step === 2) {
-      setIsProcessing(true);
-      
-      const token = localStorage.getItem("token");
-      if (!token) {
-        alert("Wajib login dulu buat booking bang!");
-        router.push("/login");
-        return;
-      }
-
-      // Hitung jam selesai (misal mulai jam 10:00, durasi 2 jam = selesai 12:00)
-      const startHour = parseInt(formData.time.split(':')[0]);
-      const endHour = startHour + parseInt(formData.duration);
-      // Format jam biar tetep 2 digit (misal: "09:00" bukan "9:00")
-      const endTimeFormatted = `${endHour.toString().padStart(2, '0')}:00`;
-
-      try {
-        // Tembak API FastAPI
-        const response = await axios.post(
-          `http://localhost:8000/api/cafes/${baseId}/reservations`,
-          {
-            booking_date: formData.date,
-            start_time: formData.time,
-            end_time: endTimeFormatted,
-            guest_count: parseInt(formData.guests)
-          },
-          {
-            headers: {
-              "Authorization": `Bearer ${token}`,
-              "Content-Type": "application/json"
-            }
-          }
-        );
-
-        // Kalau sukses dapet ID dari backend, simpen buat ditampilin di tiket
-        setReservationData(response.data);
-        
-        // Buat demo lomba: Buka Midtrans di tab baru, lalu pindah ke halaman Sukses di tab ini.
-        if (response.data.payment_url) {
-            window.open(response.data.payment_url, '_blank');
-        }
-        
-        setStep(3);
-
-      } catch (error: any) {
-        // 🚨 ALERT ANTI-BENTROK DARI BACKEND MUNCUL DI SINI 🚨
-        const errorMsg = error.response?.data?.detail || "Sistem error bang.";
-        alert("Waduh, Gagal Booking:\n\n" + (typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)));
-        
-        // Kalo bentrok, suruh user milih jam lain (balik ke step 1)
-        if (error.response?.status === 400) {
-            setStep(1);
-        }
-      } finally {
-        setIsProcessing(false);
+  let aiData = { positive: 85, neutral: 10, negative: 5, conclusion: "Vibe kafenya netral. Ada yang suka, ada yang ngerasa biasa aja." };
+  try {
+    const aiRes = await fetch(`http://localhost:8000/api/cafes/${baseId}/ai-summary`, { cache: 'no-store' });
+    if (aiRes.ok) {
+      const data = await aiRes.json();
+      if (data.sentiment_breakdown) {
+        const total = data.total_reviews_analyzed || 1;
+        aiData = {
+          positive: Math.round((data.sentiment_breakdown.positive_reviews / total) * 100) || 0,
+          neutral: 0,
+          negative: Math.round((data.sentiment_breakdown.negative_reviews / total) * 100) || 0,
+          conclusion: data.ai_conclusion
+        };
       }
     }
-  };
+  } catch (error) {
+    console.error("Gagal load AI summary", error);
+  }
+
+  // Karena ini Server Component dan nggak ada cookie JWT, 
+  // twin match asli bakal dihitung di client-side atau pake data global, 
+  // untuk sekarang kita tampilkan N/A atau 0
+  const matchScore = 0;
 
   return (
-    <div className="min-h-screen bg-zinc-50 pb-20">
-      
-      {/* Header */}
-      <div className="bg-white border-b border-zinc-100 py-6 sticky top-0 z-50">
-        <div className="container mx-auto max-w-screen-md px-4 flex items-center justify-between">
-          <Link href={`/cafe/${id}`} className="flex items-center text-sm font-medium text-zinc-500 hover:text-black transition-colors">
-            <ArrowLeft className="w-5 h-5 mr-1" /> Batal
+    <div className="bg-white text-black min-h-screen pb-20">
+      {/* Top Nav */}
+      <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between max-w-screen-xl">
+          <Link href="/discover" className="flex items-center text-sm font-medium hover:bg-zinc-100 px-3 py-2 rounded-lg transition-colors">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Kembali
           </Link>
-          <div className="font-bold text-lg">Reservasi Ruangan</div>
-          <div className="w-16" /> {/* Spacer */}
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="rounded-full"><Share className="w-5 h-5" /></Button>
+            <WishlistButton cafeId={cafe.id} />
+          </div>
         </div>
       </div>
 
-      <div className="container mx-auto max-w-screen-md px-4 py-8">
-        
-        {/* Progress Bar (Kode Lu) */}
-        {step < 3 && (
-          <div className="flex items-center justify-between mb-8 relative">
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-zinc-200 -z-10 rounded-full overflow-hidden">
-              <div className={`h-full bg-black transition-all duration-500 ${step === 1 ? 'w-1/2' : 'w-full'}`} />
+      {/* Hero Image */}
+      <div className="relative w-full h-[40vh] md:h-[50vh] bg-zinc-200">
+        <Image 
+          src={cafe.image_url || "https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=2047&auto=format&fit=crop"} 
+          alt={cafe.name} fill priority className="object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+        <div className="absolute bottom-0 left-0 w-full p-6 md:p-12">
+          <div className="container mx-auto max-w-screen-xl flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="text-white">
+              <Badge className="bg-amber-500 hover:bg-amber-600 border-none text-white mb-3">
+                <Star className="w-3 h-3 mr-1 fill-white" /> {cafe.rating || "4.8"} 
+              </Badge>
+              <h1 className="text-4xl md:text-6xl font-bold mb-2 tracking-tight">{cafe.name}</h1>
+              <p className="text-zinc-300 flex items-center text-lg">
+                <MapPin className="w-5 h-5 mr-1" /> {cafe.location || "Malang, Indonesia"}
+              </p>
             </div>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 1 ? 'bg-black text-white' : 'bg-zinc-200 text-zinc-500'}`}>1</div>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= 2 ? 'bg-black text-white' : 'bg-zinc-200 text-zinc-500'}`}>2</div>
-          </div>
-        )}
-
-        {/* Step 1: Form Data (Kode Lu) */}
-        {step === 1 && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* ... (Isi UI Step 1 Sama Persis) ... */}
-            <Card className="rounded-[2rem] border-none shadow-sm mb-6 overflow-hidden">
-              <div className="flex flex-col sm:flex-row items-center gap-4 p-4 bg-blue-50/50">
-                <div className="w-full sm:w-24 h-24 rounded-xl overflow-hidden relative shrink-0">
-                  <Image src="https://images.unsplash.com/photo-1497935586351-b67a49e012bf?auto=format&fit=crop&q=80&w=400" alt="Cafe" fill className="object-cover" />
-                </div>
-                <div>
-                  <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-none mb-1">Meeting Room (Max 6 Org)</Badge>
-                  <h2 className="text-xl font-bold">Booking Kafe ID: {baseId}</h2>
-                  <p className="text-sm text-zinc-500">Rp 50.000 / Jam / Orang (DP)</p>
-                </div>
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex items-center gap-4 text-white w-max">
+              <div className="relative w-16 h-16 rounded-full flex items-center justify-center border-4 border-amber-400">
+                <span className="font-bold text-xl">{cafe.rating || "4.8"}</span>
               </div>
-            </Card>
-
-            <form onSubmit={handleNext} className="space-y-6">
-              
-              {/* Box 1: Jadwal */}
-              <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-zinc-100 space-y-6">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-lg flex items-center gap-2"><Calendar className="w-5 h-5" /> Pilih Jadwal</h3>
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Room Available</Badge>
-                </div>
-                
-                {/* Date Selector (GW GANTI TAHUNNYA BIAR COCOK SAMA HARI INI: 2026-05) */}
-                <div className="space-y-3">
-                  <label className="text-sm font-semibold text-zinc-700">Tanggal</label>
-                  <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
-                    {[
-                      { day: "Sen", date: "16", active: formData.date === "2026-05-16", val: "2026-05-16" },
-                      { day: "Sel", date: "17", active: formData.date === "2026-05-17", val: "2026-05-17" },
-                      { day: "Rab", date: "18", active: formData.date === "2026-05-18", val: "2026-05-18" },
-                      { day: "Kam", date: "19", active: formData.date === "2026-05-19", val: "2026-05-19" },
-                    ].map((d, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        disabled={d.disabled}
-                        onClick={() => setFormData({...formData, date: d.val})}
-                        className={`flex-shrink-0 w-16 h-20 rounded-2xl flex flex-col items-center justify-center border-2 transition-all snap-start ${
-                          d.disabled ? 'opacity-40 bg-zinc-50 border-zinc-100 cursor-not-allowed' :
-                          d.active ? 'border-black bg-black text-white shadow-md' : 'border-zinc-200 bg-white hover:border-zinc-300 text-black'
-                        }`}
-                      >
-                        <span className={`text-xs font-medium mb-1 ${d.active ? 'text-zinc-300' : 'text-zinc-500'}`}>{d.day}</span>
-                        <span className="text-xl font-bold">{d.date}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Time Slots */}
-                <div className="space-y-3">
-                  <label className="text-sm font-semibold text-zinc-700">Slot Jam Mulai</label>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                    {["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "18:00"].map((t, i) => {
-                      const isActive = formData.time === t;
-                      return (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setFormData({...formData, time: t})}
-                          className={`py-3 rounded-xl text-sm font-bold border-2 transition-all ${
-                            isActive ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-zinc-200 bg-white hover:border-amber-200 text-black'
-                          }`}
-                        >
-                          {t}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Duration & Guests */}
-                <div className="grid grid-cols-2 gap-4 pt-2">
-                  <div className="space-y-3">
-                    <label className="text-sm font-semibold text-zinc-700">Durasi (Jam)</label>
-                    <div className="flex items-center gap-3 bg-zinc-50 p-1.5 rounded-xl border border-zinc-200 w-full justify-between">
-                      <Button type="button" variant="outline" size="icon" onClick={() => setFormData({...formData, duration: String(Math.max(1, parseInt(formData.duration || "1") - 1))})} className="w-8 h-8 rounded-lg bg-white">-</Button>
-                      <span className="font-bold text-sm">{formData.duration || "1"} Jam</span>
-                      <Button type="button" variant="outline" size="icon" onClick={() => setFormData({...formData, duration: String(Math.min(8, parseInt(formData.duration || "1") + 1))})} className="w-8 h-8 rounded-lg bg-white">+</Button>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-sm font-semibold text-zinc-700">Jumlah Orang</label>
-                    <div className="flex items-center gap-3 bg-zinc-50 p-1.5 rounded-xl border border-zinc-200 w-full justify-between">
-                      <Button type="button" variant="outline" size="icon" onClick={() => setFormData({...formData, guests: String(Math.max(1, parseInt(formData.guests) - 1))})} className="w-8 h-8 rounded-lg bg-white">-</Button>
-                      <span className="font-bold text-sm">{formData.guests} Org</span>
-                      <Button type="button" variant="outline" size="icon" onClick={() => setFormData({...formData, guests: String(Math.min(6, parseInt(formData.guests) + 1))})} className="w-8 h-8 rounded-lg bg-white">+</Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Box 2: Informasi Pemesan (Kode Lu) */}
-              <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-zinc-100 space-y-5">
-                <h3 className="font-bold text-lg mb-2 flex items-center gap-2"><Users className="w-5 h-5" /> Informasi Pemesan</h3>
-                
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-zinc-700">Nama Lengkap</label>
-                  <Input 
-                    required 
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="bg-zinc-50 h-12 rounded-xl border-zinc-200" 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-zinc-700">Nomor Telepon</label>
-                  <Input 
-                    type="tel"
-                    required 
-                    value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className="bg-zinc-50 h-12 rounded-xl border-zinc-200" 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-zinc-700">Catatan Tambahan (Opsional)</label>
-                  <Input 
-                    placeholder="Contoh: Butuh proyektor atau kabel HDMI..."
-                    value={formData.notes}
-                    onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                    className="bg-zinc-50 h-12 rounded-xl border-zinc-200" 
-                  />
-                </div>
-              </div>
-
-              <Button 
-                type="submit" 
-                disabled={!formData.date || !formData.time}
-                className="w-full bg-black hover:bg-zinc-800 disabled:bg-zinc-300 text-white rounded-full h-14 font-bold text-lg shadow-xl shadow-black/20"
-              >
-                Lanjut ke Pembayaran <ChevronRight className="w-5 h-5 ml-1" />
-              </Button>
-            </form>
-          </div>
-        )}
-
-        {/* Step 2: Payment Gateway (Kode Lu, Tagihan Dinamis berdasarkan guest) */}
-        {step === 2 && (
-          <div className="animate-in fade-in slide-in-from-right-8 duration-500">
-            <h2 className="text-2xl font-bold mb-6">Pilih Metode Pembayaran</h2>
-
-            <Card className="rounded-[2rem] border-none shadow-sm mb-6 bg-white overflow-hidden">
-              <div className="p-6 border-b border-zinc-100 bg-zinc-50/50">
-                <p className="text-sm text-zinc-500 mb-1">Total Tagihan Booking (DP)</p>
-                {/* Harga dinamis: Jumlah Orang x 50rb */}
-                <div className="text-3xl font-bold">Rp {(parseInt(formData.guests) * 50000).toLocaleString()}</div>
-              </div>
-              <CardContent className="p-6 space-y-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Kafe ID</span>
-                  <span className="font-semibold">{baseId}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Jadwal</span>
-                  <span className="font-semibold">{formData.date} • {formData.time} WIB</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-500">Peserta</span>
-                  <span className="font-semibold">{formData.guests} Orang</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <form onSubmit={handleNext} className="space-y-4">
-              <p className="font-bold text-sm text-zinc-500 uppercase tracking-wider mb-2">E-Wallet / QRIS</p>
-              
-              <label className="flex items-center justify-between p-4 bg-white border-2 border-zinc-200 rounded-2xl cursor-pointer hover:border-amber-500 transition-colors has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center font-bold text-xs">QRIS</div>
-                  <span className="font-bold">QRIS (Gopay/Ovo/Dana)</span>
-                </div>
-                <input type="radio" name="payment" defaultChecked className="w-5 h-5 accent-amber-500" />
-              </label>
-
-              <label className="flex items-center justify-between p-4 bg-white border-2 border-zinc-200 rounded-2xl cursor-pointer hover:border-amber-500 transition-colors has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center"><CreditCard className="w-5 h-5 text-zinc-500" /></div>
-                  <span className="font-bold">Virtual Account BCA</span>
-                </div>
-                <input type="radio" name="payment" className="w-5 h-5 accent-amber-500" />
-              </label>
-
-              <div className="flex items-center gap-2 text-xs text-zinc-500 mt-6 mb-2 justify-center">
-                <ShieldCheck className="w-4 h-4 text-green-500" /> Pembayaran akan diproses via Midtrans Sandbox
-              </div>
-
-              <Button 
-                type="submit" 
-                disabled={isProcessing}
-                className="w-full bg-black hover:bg-zinc-800 text-white rounded-full h-14 font-bold text-lg shadow-xl shadow-black/20"
-              >
-                {isProcessing ? "Menghubungi Server..." : `Bayar Rp ${(parseInt(formData.guests) * 50000).toLocaleString()} Sekarang`}
-              </Button>
-            </form>
-          </div>
-        )}
-
-        {/* Step 3: Success Ticket (Menampilkan ID Reservasi Asli dari DB) */}
-        {step === 3 && (
-          <div className="animate-in zoom-in-95 fade-in duration-500 flex flex-col items-center justify-center py-10">
-            
-            <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6">
-              <CheckCircle2 className="w-12 h-12 text-green-600" />
-            </div>
-            
-            <h2 className="text-3xl font-bold mb-2 text-center">Reservasi Berhasil!</h2>
-            <p className="text-zinc-500 mb-10 text-center max-w-sm">Tempat lo udah diamankan di database. Tunjukin tiket ini ke kasir.</p>
-
-            <div className="w-full max-w-sm bg-white rounded-[2rem] border border-zinc-200 shadow-2xl relative overflow-hidden">
-              <div className="absolute -left-4 top-1/2 w-8 h-8 bg-zinc-50 rounded-full border-r border-zinc-200" />
-              <div className="absolute -right-4 top-1/2 w-8 h-8 bg-zinc-50 rounded-full border-l border-zinc-200" />
-              <div className="absolute left-6 right-6 top-1/2 border-t-2 border-dashed border-zinc-200" />
-
-              <div className="p-8 pb-10 text-center">
-                <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none mb-4">CONFIRMED</Badge>
-                <h3 className="font-bold text-2xl mb-1">Kafe ID: {baseId}</h3>
-                <p className="text-zinc-500 text-sm">Meeting Room</p>
-              </div>
-
-              <div className="p-8 pt-10 bg-zinc-50 space-y-4">
-                <div className="flex justify-between">
-                  <span className="text-zinc-500 text-sm">Nama</span>
-                  <span className="font-bold text-sm text-right">{formData.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500 text-sm">Waktu</span>
-                  <span className="font-bold text-sm text-right">{formData.date} • {formData.time} WIB</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-zinc-500 text-sm">Kode Booking</span>
-                  {/* Tampilkan ID asli dari database */}
-                  <span className="font-bold text-sm text-right text-amber-600">
-                    RES-{reservationData?.reservation_id || "8921"}
-                  </span>
-                </div>
+              <div>
+                <p className="font-bold">Rating</p>
+                <p className="text-sm text-zinc-300">Dari {cafe.reviewCount || 0} reviews</p>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
 
-            <div className="mt-10 flex gap-4 w-full max-w-sm">
-              <Link href="/profile" className="w-full">
-                <Button variant="outline" className="w-full rounded-full h-12 border-2">Cek di Profil</Button>
-              </Link>
-              <Link href="/discover" className="w-full">
-                <Button className="w-full bg-black hover:bg-zinc-800 text-white rounded-full h-12">Ke Beranda</Button>
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-12 max-w-screen-xl flex flex-col lg:flex-row gap-12">
+        <div className="flex-1 space-y-12">
+          
+          {/* AI Vibe */}
+          <section className="bg-[#F3F0FF] p-6 md:p-8 rounded-[2rem] relative overflow-hidden">
+             <Badge className="bg-purple-200 text-purple-800 border-none mb-4 uppercase tracking-wider font-bold text-xs flex items-center gap-1 w-max">
+               <Brain className="w-3 h-3" /> AI Generated Vibe
+             </Badge>
+             <h2 className="text-2xl font-bold mb-4">Rangkuman Suasana</h2>
+              <p className="text-lg text-purple-900/80 leading-relaxed font-medium mb-6">
+                "{aiData.conclusion}"
+              </p>
+              <div className="space-y-3 z-10 relative">
+                 <div className="flex items-center gap-4">
+                   <span className="w-20 text-sm font-semibold text-green-700">Positif</span>
+                   <div className="flex-1 h-2 bg-purple-200/50 rounded-full overflow-hidden">
+                     <div className="h-full bg-green-500 rounded-full" style={{ width: `${aiData.positive}%` }}></div>
+                   </div>
+                   <span className="w-10 text-sm font-bold text-purple-900">{aiData.positive}%</span>
+                 </div>
+                 <div className="flex items-center gap-4">
+                   <span className="w-20 text-sm font-semibold text-red-500">Negatif</span>
+                   <div className="flex-1 h-2 bg-purple-200/50 rounded-full overflow-hidden">
+                     <div className="h-full bg-red-400 rounded-full" style={{ width: `${aiData.negative}%` }}></div>
+                   </div>
+                   <span className="w-10 text-sm font-bold text-purple-900">{aiData.negative}%</span>
+                 </div>
+               </div>
+             <Sparkles className="absolute -right-4 -bottom-4 w-32 h-32 text-purple-500/10 z-0" />
+          </section>
+
+          {/* Fasilitas */}
+          <section>
+            <h2 className="text-2xl font-bold mb-6">Fasilitas Tersedia</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {(cafe.facilities || []).map((fac: any, index: number) => (
+                <div key={index} className="border border-zinc-200 rounded-2xl p-4 flex flex-col items-center justify-center text-center hover:border-amber-500 transition-colors bg-zinc-50">
+                  {getIcon(fac.name || fac)} 
+                  <span className="text-sm font-semibold text-zinc-700">{fac.name || fac}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        {/* Sidebar */}
+        <div className="w-full lg:w-80">
+          <div className="sticky top-24 bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm">
+            <h3 className="font-bold text-lg mb-2">Check-in ke Spot Ini?</h3>
+            <p className="text-sm text-zinc-500 mb-6">Kasih tau teman-teman lo kalau lo lagi asik ngopi di sini.</p>
+            <CheckInModal cafeId={cafe.id} cafeName={cafe.name} />
+
+            {/* Tombol Booking */}
+            <div className="mt-6 pt-6 border-t border-zinc-100">
+              <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-none mb-3 font-bold">TERSEDIA MEETING ROOM</Badge>
+              <Link href={`/cafe/${cafe.id}/reserve`} className="block">
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-full h-12 shadow-md">
+                  <CalendarDays className="w-4 h-4 mr-2" /> Reservasi Ruangan
+                </Button>
               </Link>
             </div>
           </div>
-        )}
-
+        </div>
       </div>
     </div>
   );
