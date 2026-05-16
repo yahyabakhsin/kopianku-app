@@ -1,0 +1,14 @@
+# Folder Backend (Python)
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Folder Frontend (Node/Next.js)
+node_modules/
+.next/
+out/
+.env.local
+
+# File Sistem
+.DS_Store
