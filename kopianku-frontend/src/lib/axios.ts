@@ -1,10 +1,14 @@
 import axios from 'axios';
 
-// Pastikan selalu pakai https untuk production (Railway Railway)
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-const API_URL = rawApiUrl.startsWith('http://') && !rawApiUrl.includes('localhost')
-  ? rawApiUrl.replace('http://', 'https://')
-  : rawApiUrl;
+// Production URL Railway backend (always https)
+const RAILWAY_URL = 'https://kopianku-app-production.up.railway.app/api';
+
+// Ambil dari env var, pastikan selalu https, atau pakai Railway URL langsung
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || RAILWAY_URL;
+const API_URL = rawApiUrl.includes('localhost') 
+  ? rawApiUrl  // dev lokal tetap http
+  : rawApiUrl.replace('http://', 'https://');  // production selalu https
+
 
 // Konfigurasi dasar Axios
 export const apiClient = axios.create({
