@@ -32,7 +32,7 @@ export function PersonalizedView({ cafeId, initialFacilities }: { cafeId: string
           return;
         }
         
-        const res = await axios.get(`http://localhost:8000/api/cafes/${cafeId}`, {
+        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/cafes/${cafeId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         

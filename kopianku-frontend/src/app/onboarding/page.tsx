@@ -47,7 +47,7 @@ export default function OnboardingPage() {
     formData.append("file", file);
 
     try {
-      const response = await axios.post("http://localhost:8000/api/auth/upload-avatar", formData, {
+      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}//auth/upload-avatar", formData, {
         headers: {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "multipart/form-data"
