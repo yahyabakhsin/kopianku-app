@@ -1,8 +1,10 @@
+
+PyJWT
 fastapi
-uvicorn
-sqlmodel
-psycopg2-binary
-python-multipart
-python-jose[cryptography]
-passlib[bcrypt]
 midtransclient
+passlib[bcrypt]
+psycopg2-binary
+python-jose[cryptography]
+python-multipart
+sqlmodel
+uvicorn
