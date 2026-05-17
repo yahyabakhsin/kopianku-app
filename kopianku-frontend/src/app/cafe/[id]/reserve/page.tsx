@@ -257,7 +257,7 @@ export default function ReservationPage() {
                       
                       const startHour = formData.time ? parseInt(formData.time.split(':')[0]) : 0;
                       const currentHour = parseInt(t.split(':')[0]);
-                      const isDisabled = isFull || (formData.time && currentHour <= startHour);
+                      const isDisabled = isFull || !!(formData.time && currentHour <= startHour);
 
                       return (
                         <button
