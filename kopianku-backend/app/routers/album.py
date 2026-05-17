@@ -24,7 +24,7 @@ class AlbumUpdate(BaseModel):
     description: Optional[str] = None
     is_public: Optional[bool] = None
 
-@router.get("/")
+@router.get("")
 def get_user_albums(session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
     albums = session.exec(select(Album).where(Album.user_id == current_user.id)).all()
     
@@ -40,7 +40,7 @@ def get_user_albums(session: Session = Depends(get_session), current_user: User 
         })
     return result
 
-@router.post("/")
+@router.post("")
 def create_album(album_req: AlbumCreate, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
     new_album = Album(
         user_id=current_user.id,

@@ -35,7 +35,7 @@ def get_optional_user(request: Request, session: Session = Depends(get_session))
         pass
     return None
 
-@router.get("/")
+@router.get("")
 def get_global_feed(
     request: Request,
     session: Session = Depends(get_session),
