@@ -112,7 +112,7 @@ export function OnboardingQuiz() {
 
       // Nembak API backend
       await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}//auth/onboarding", 
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/auth/onboarding`, 
         selectedTags,
         { headers: { Authorization: `Bearer ${token}` } }
       );

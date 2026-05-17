@@ -45,7 +45,7 @@ function DiscoverContent() {
           return;
         }
 
-        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}//cafes", {
+        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/cafes`, {
           headers: {
             "Authorization": `Bearer ${token}`
           }
