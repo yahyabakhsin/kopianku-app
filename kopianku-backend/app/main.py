@@ -16,7 +16,7 @@ from app.data.dummy_cafes import cafes_malang
 from app.routers import cafe, auth, owner, chatbot, album, feed, user_profile
 
 # 1. Bikin Gedungnya SEKALI AJA
-app = FastAPI(title="Kopianku API")
+app = FastAPI(title="Kopianku API", redirect_slashes=False)
 
 # 2. Pasang Satpam CORS
 app.add_middleware(
