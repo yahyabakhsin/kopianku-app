@@ -15,7 +15,9 @@ import midtransclient
 from datetime import datetime
 
 router = APIRouter()
-from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+optional_security = HTTPBearer(auto_error=False)
 
 # Load model NLP ringan untuk sentimen (proses ini makan waktu beberapa detik pas server baru nyala)
 print("Loading AI Model... Sabar bang...")
@@ -31,11 +33,31 @@ snap = midtransclient.Snap(
     server_key=MIDTRANS_SERVER_KEY
 )
 
+def evaluate_cafe_is_full(cafe: Cafe) -> bool:
+    if cafe.is_full:
+        return True
+    
+    # Cek apakah full_date, start_time, end_time diset
+    if cafe.full_date and cafe.full_start_time and cafe.full_end_time:
+        now = datetime.now()
+        current_date = now.strftime("%Y-%m-%d")
+        
+        # Hanya hitung penuh jika tanggalnya adalah hari ini
+        if current_date == cafe.full_date:
+            current_time = now.strftime("%H:%M")
+            if cafe.full_start_time <= cafe.full_end_time:
+                if cafe.full_start_time <= current_time <= cafe.full_end_time:
+                    return True
+            else:
+                # Over-midnight schedule
+                if current_time >= cafe.full_start_time or current_time <= cafe.full_end_time:
+                    return True
+    return False
+
 @router.get("/cafes")
 def get_all_cafes(
     session: Session = Depends(get_session),
-    # Ubah tipe datanya jadi HTTPAuthorizationCredentials, dan pake security dari auth.py
-    token_data: Optional[HTTPAuthorizationCredentials] = Depends(security) 
+    token_data: Optional[HTTPAuthorizationCredentials] = Depends(optional_security) 
 ):
     cafes = session.exec(select(Cafe)).all()
     
@@ -55,26 +77,116 @@ def get_all_cafes(
         match_score = 0
         
         if current_user and current_user.preferences:
-            cafe_tags = cafe.vibes + [f.get("name") for f in cafe.facilities] if isinstance(cafe.facilities, list) else []
+            vibes = cafe.vibes if cafe.vibes else []
+            facilities = [f.get("name") for f in cafe.facilities] if isinstance(cafe.facilities, list) else []
+
+            cafe_tags = vibes + facilities
             matches = set(current_user.preferences) & set(cafe_tags)
             match_score = int((len(matches) / len(current_user.preferences)) * 100) if current_user.preferences else 0
         
         cafe_dict["match_score"] = match_score
+        cafe_dict["is_full"] = evaluate_cafe_is_full(cafe)
         cafes_with_score.append(cafe_dict)
 
     return sorted(cafes_with_score, key=lambda x: x["match_score"], reverse=True)
 
+@router.get("/cafes/search")
+def search_cafes(q: str = "", session: Session = Depends(get_session)):
+    if not q:
+        return []
+    cafes = session.exec(select(Cafe).where(Cafe.name.ilike(f"%{q}%")).limit(10)).all()
+    return cafes
+
+from sqlalchemy.sql.expression import func
+
+@router.get("/cafes/surprise-me")
+def get_surprise_me_cafe(
+    session: Session = Depends(get_session),
+    token_data: Optional[HTTPAuthorizationCredentials] = Depends(optional_security)
+):
+    current_user = None
+    if token_data:
+        try:
+            current_user = get_current_user(token_data, session)
+        except:
+            pass
+
+    random_cafe = None
+
+    if current_user and current_user.preferences:
+        # User has preferences, let's find cafes that match well, and pick one randomly from top matches
+        all_cafes = session.exec(select(Cafe)).all()
+        scored_cafes = []
+        for cafe in all_cafes:
+            vibes = cafe.vibes if cafe.vibes else []
+            facilities = [f.get("name") for f in cafe.facilities] if isinstance(cafe.facilities, list) else []
+            cafe_tags = vibes + facilities
+            matches = set(current_user.preferences) & set(cafe_tags)
+            match_score = int((len(matches) / len(current_user.preferences)) * 100) if current_user.preferences else 0
+            
+            # Prefer rating too
+            final_score = match_score + (cafe.rating * 10)
+            scored_cafes.append((final_score, cafe))
+        
+        # Sort by score descending
+        scored_cafes.sort(key=lambda x: x[0], reverse=True)
+        # Pick one from top 3 randomly
+        top_candidates = [c[1] for c in scored_cafes[:3]]
+        import random
+        if top_candidates:
+            random_cafe = random.choice(top_candidates)
+
+    if not random_cafe:
+        # Fallback to random with high rating
+        random_cafe = session.exec(select(Cafe).where(Cafe.rating >= 4.0).order_by(func.random()).limit(1)).first()
+        
+    if not random_cafe:
+        random_cafe = session.exec(select(Cafe).order_by(func.random()).limit(1)).first()
+    
+    if not random_cafe:
+        raise HTTPException(status_code=404, detail="Belum ada kafe sama sekali di sistem")
+        
+    return random_cafe
+
 @router.get("/cafes/{cafe_id}")
-def get_cafe_detail(cafe_id: str, session: Session = Depends(get_session)):
+def get_cafe_detail(
+    cafe_id: str, 
+    session: Session = Depends(get_session),
+    token_data: Optional[HTTPAuthorizationCredentials] = Depends(optional_security)
+):
     # 1. Cari kafe berdasarkan ID
     cafe = session.get(Cafe, cafe_id)
     
     # 2. Kalau nggak ketemu, lempar 404
     if not cafe:
         raise HTTPException(status_code=404, detail="Kafenya nggak ketemu bang!")
+        
+    current_user = None
+    if token_data:
+        try:
+            current_user = get_current_user(token_data, session)
+        except:
+            pass
+            
+    cafe_dict = cafe.dict()
+    match_score = 0
+    matched_tags = []
     
-    # 3. Kalau ketemu, return datanya
-    return cafe
+    if current_user and current_user.preferences:
+        vibes = cafe.vibes if cafe.vibes else []
+        facilities = [f.get("name") for f in cafe.facilities] if isinstance(cafe.facilities, list) else []
+        cafe_tags = vibes + facilities
+        
+        matches = set(current_user.preferences) & set(cafe_tags)
+        matched_tags = list(matches)
+        match_score = int((len(matches) / len(current_user.preferences)) * 100) if current_user.preferences else 0
+        
+    cafe_dict["match_score"] = match_score
+    cafe_dict["matched_tags"] = matched_tags
+    cafe_dict["is_full"] = evaluate_cafe_is_full(cafe)
+    
+    # Provide safe fallback for is_full property
+    return cafe_dict
 
 @router.post("/cafes/{cafe_id}/reviews")
 def add_review(
@@ -83,42 +195,164 @@ def add_review(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
-    # 1. Cek kafenya ada atau nggak
     cafe = session.get(Cafe, cafe_id)
     if not cafe:
         raise HTTPException(status_code=404, detail="Kafenya nggak ketemu bang!")
 
-    # 2. Bikin review baru
-    new_review = Review(
-        text=review_data.text,
-        rating=review_data.rating,
-        user_id=current_user.id,
-        cafe_id=cafe_id
-    )
-    session.add(new_review)
+    existing_review = session.exec(
+        select(Review).where(Review.user_id == current_user.id, Review.cafe_id == cafe_id)
+    ).first()
 
-    # 3. MENGHITUNG RATA-RATA RATING BARU
-    # Rumus: ((Rating Lama * Jumlah Review Lama) + Rating Baru) / (Jumlah Review Lama + 1)
-    
-    total_skor_lama = cafe.rating * cafe.reviewCount
-    total_skor_baru = total_skor_lama + review_data.rating
-    jumlah_review_baru = cafe.reviewCount + 1
-    
-    rating_baru = total_skor_baru / jumlah_review_baru
-
-    # 4. Update data kafenya
-    cafe.rating = round(rating_baru, 1) # Bulatin jadi 1 angka di belakang koma (misal 4.5)
-    cafe.reviewCount = jumlah_review_baru
-    session.add(cafe)
-
-    # 5. Simpan semuanya (Review baru & Update Cafe) ke Postgres dalam 1x jalan!
+    if existing_review:
+        existing_review.text = review_data.text
+        existing_review.rating = review_data.rating
+        existing_review.images = review_data.images or []
+        session.add(existing_review)
+    else:
+        new_review = Review(
+            text=review_data.text,
+            rating=review_data.rating,
+            user_id=current_user.id,
+            cafe_id=cafe_id,
+            images=review_data.images or []
+        )
+        session.add(new_review)
+        
     session.commit()
+
+    # Recalculate average rating
+    all_reviews = session.exec(select(Review).where(Review.cafe_id == cafe_id)).all()
+    cafe.reviewCount = len(all_reviews)
+    if cafe.reviewCount > 0:
+        cafe.rating = round(sum(r.rating for r in all_reviews) / cafe.reviewCount, 1)
+    else:
+        cafe.rating = 0
+    session.add(cafe)
+    session.commit()
+
+    return {"message": "Review berhasil di-update!", "new_cafe_rating": cafe.rating, "new_review_count": cafe.reviewCount}
+from app.models.checkin import CheckIn
+from app.models.review import Review
+from sqlalchemy import desc
+from pydantic import BaseModel
+
+class StatusUpdate(BaseModel):
+    is_full: bool
+    full_date: Optional[str] = None
+    full_start_time: Optional[str] = None
+    full_end_time: Optional[str] = None
+
+@router.put("/cafes/{cafe_id}/status")
+def update_cafe_status(
+    cafe_id: str,
+    req: StatusUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    cafe = session.get(Cafe, cafe_id)
+    if not cafe or cafe.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Lo bukan owner kafe ini!")
     
+    cafe.is_full = req.is_full
+    if req.full_date is not None:
+        cafe.full_date = req.full_date
+    if req.full_start_time is not None:
+        cafe.full_start_time = req.full_start_time
+    if req.full_end_time is not None:
+        cafe.full_end_time = req.full_end_time
+        
+    session.add(cafe)
+    session.commit()
     return {
-        "message": "Mantap, review berhasil ditambahkan dan rating kafe udah di-update!",
-        "new_cafe_rating": cafe.rating,
-        "new_review_count": cafe.reviewCount
+        "message": "Status berhasil diupdate", 
+        "is_full": cafe.is_full, 
+        "full_date": cafe.full_date,
+        "full_start_time": cafe.full_start_time, 
+        "full_end_time": cafe.full_end_time
     }
+
+@router.get("/cafes/me/owned")
+def get_owned_cafes(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    cafes = session.exec(select(Cafe).where(Cafe.owner_id == current_user.id)).all()
+    return cafes
+
+@router.get("/business/dashboard/{cafe_id}")
+def get_business_dashboard(
+    cafe_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    # Verifikasi kepemilikan kafe
+    cafe = session.get(Cafe, cafe_id)
+    if not cafe or cafe.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Lo bukan owner kafe ini!")
+
+    # Live checkins (total check-ins for now)
+    live_checkins = len(session.exec(select(CheckIn).where(CheckIn.cafe_id == cafe_id)).all())
+    
+    # Ambil 5 review terbaru
+    recent_reviews = session.exec(
+        select(Review).where(Review.cafe_id == cafe_id).order_by(desc(Review.created_at)).limit(5)
+    ).all()
+    
+    activities = []
+    for r in recent_reviews:
+        user = session.get(User, r.user_id)
+        if user:
+            activities.append({
+                "type": "review",
+                "customer": user.username,
+                "rating": r.rating,
+                "time": r.created_at.strftime("%H:%M WIB, %d %b"),
+                "status": f"Bintang {r.rating}",
+                "color": "bg-green-100 text-green-700" if r.rating >= 4 else ("bg-red-100 text-red-700" if r.rating <= 2 else "bg-amber-100 text-amber-700")
+            })
+
+    # Ambil check-in terbaru
+    recent_checkins = session.exec(
+        select(CheckIn).where(CheckIn.cafe_id == cafe_id).order_by(desc(CheckIn.created_at)).limit(5)
+    ).all()
+    
+    for c in recent_checkins:
+        user = session.get(User, c.user_id)
+        if user:
+            activities.append({
+                "type": "checkin",
+                "customer": user.username,
+                "rating": "-",
+                "time": c.created_at.strftime("%H:%M WIB, %d %b"),
+                "status": "CHECK-IN",
+                "color": "bg-blue-100 text-blue-700"
+            })
+            
+    # Sort activities by time (approximate descending)
+    activities.sort(key=lambda x: x["time"], reverse=True)
+
+    return {
+        "stats": {
+            "total_revenue": f"Rp {live_checkins * 25000 + len(recent_reviews) * 50000}", # Mock
+            "active_reservations": f"{len(recent_reviews)} Ulasan Baru",
+            "live_checkins": f"{live_checkins} Orang",
+            "avg_rating": cafe.rating
+        },
+        "recent_activities": activities[:6]
+    }
+
+@router.get("/cafes/{cafe_id}/my-review")
+def get_my_review(
+    cafe_id: str,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    review = session.exec(
+        select(Review).where(Review.user_id == current_user.id, Review.cafe_id == cafe_id)
+    ).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Belum pernah review")
+    return review
 
 @router.get("/cafes/{cafe_id}/reviews")
 def get_cafe_reviews(cafe_id: str, session: Session = Depends(get_session)):
@@ -259,18 +493,17 @@ def create_reservation(
     try:
         # Tembak API Midtrans
         transaction = snap.create_transaction(param)
-        payment_url = transaction['redirect_url']
+        payment_token = transaction['token']
     except Exception as e:
-        # JURUS HACKATHON: Kalau Server Key lu kosong/salah, 
-        # API nggak bakal crash, tapi ngasih link dummy biar demo tetep jalan.
-        payment_url = "https://simulator.sandbox.midtrans.com/qris/index.html" 
+        # JURUS HACKATHON: Dummy token
+        payment_token = "dummy-token-12345"
 
     return {
         "message": "Reservasi berhasil diamankan! Silakan selesaikan pembayaran.", 
         "reservation_id": new_reservation.id,
         "status": new_reservation.status,
         "total_tagihan": gross_amount,
-        "payment_url": payment_url  # <--- Ini yang bakal dibuka di HP juri!
+        "payment_token": payment_token  # <--- Token Snap
     }
 
     return {
@@ -326,4 +559,28 @@ def get_ai_vibe_summary(cafe_id: str, session: Session = Depends(get_session)):
         },
         "ai_conclusion": vibe_conclusion,
         "raw_ai_analysis": ai_results # Buat pamer ke juri kalau ini beneran pake ML
+    }
+
+import shutil
+import time
+from fastapi import UploadFile, File
+
+@router.post("/upload_image")
+def upload_general_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    if not file.filename.endswith(('.png', '.jpg', '.jpeg', '.webp')):
+        raise HTTPException(status_code=400, detail="Hanya boleh file gambar bang!")
+        
+    timestamp = int(time.time())
+    safe_filename = f"post_{current_user.id}_{timestamp}_{file.filename}"
+    file_location = f"static/uploads/{safe_filename}"
+    
+    with open(file_location, "wb+") as file_object:
+        shutil.copyfileobj(file.file, file_object)
+        
+    return {
+        "message": "Gambar berhasil di-upload!",
+        "url_gambar": f"http://localhost:8000/static/uploads/{safe_filename}"
     }
