@@ -67,7 +67,9 @@ def login(user_data: UserLogin, session: Session = Depends(get_session)):
     return {
         "access_token": access_token, 
         "token_type": "bearer",
-        "username": user.username
+        "username": user.username,
+        "role": user.role,
+        "has_onboarded": len(user.preferences) > 0
     }
     
 # Inisialisasi satpam pemeriksa Bearer Token
@@ -104,7 +106,8 @@ def get_my_profile(current_user: User = Depends(get_current_user)):
         "user_info": {
             "id": current_user.id,
             "username": current_user.username,
-            "email": current_user.email
+            "email": current_user.email,
+            "avatar_url": current_user.avatar_url
         }
     }
     
@@ -145,26 +148,26 @@ def get_current_owner(current_user: User = Depends(get_current_user)):
 @router.post("/upload-avatar")
 def upload_avatar(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user) # Wajib login bang!
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
 ):
-    # 1. Validasi ekstensi file tipis-tipis
     if not file.filename.endswith(('.png', '.jpg', '.jpeg')):
         raise HTTPException(status_code=400, detail="Hanya boleh file gambar bang!")
     
-    # 2. Bikin nama file unik (Pake username + timestamp biar nggak ketimpa)
-    # Contoh: yahyabakhsin_168432.png
     timestamp = int(time.time())
     safe_filename = f"{current_user.username}_{timestamp}_{file.filename}"
     file_location = f"static/uploads/{safe_filename}"
     
-    # 3. Simpan file-nya ke harddisk server
     with open(file_location, "wb+") as file_object:
         shutil.copyfileobj(file.file, file_object)
         
-    # (Di dunia nyata, lu update kolom avatar_url di tabel users di sini)
+    avatar_url = f"http://localhost:8000/static/uploads/{safe_filename}"
+    current_user.avatar_url = avatar_url
+    session.add(current_user)
+    session.commit()
     
     return {
         "message": "Foto profil berhasil di-upload dengan sukses!",
         "filename": safe_filename,
-        "url_gambar": f"http://localhost:8000/static/uploads/{safe_filename}" # <--- Link ini bisa lu klik!
+        "url_gambar": avatar_url
     }

@@ -113,5 +113,53 @@ cafes_malang = [
         "rating": 4.7,
         "reviewCount": 1800,
         "imageUrl": "https://images.unsplash.com/photo-1445116572660-236099ec97a0?auto=format&fit=crop&q=80&w=800"
+    },
+
+    {
+        "id": "9",
+        "name": "Kopi Studio 24",
+        "location": "Jl. Soekarno Hatta No.9, Malang",
+        "facilities": [
+            {"id": "f1", "name": "Wi-Fi Ngebut", "icon": "wifi"},
+            {"id": "f2", "name": "Banyak Colokan", "icon": "zap"},
+            {"id": "f9", "name": "Buka 24 Jam", "icon": "clock"}
+        ],
+        "vibes": ["WFC", "Tugas", "Begadang"],
+        "ai_summary": "Penyelamat mahasiswa UB & Polinema yang lagi nugas akhir. Buka 24 jam, colokan melimpah, dan kopi susunya nendang banget buat melek semalaman.",
+        "rating": 4.6,
+        "reviewCount": 4200,
+        "imageUrl": "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?auto=format&fit=crop&q=80&w=800"
+    },
+    
+    {
+        "id": "10",
+        "name": "Bukit Delight",
+        "location": "Jl. Joyo Agung No.1, Merjosari, Malang",
+        "facilities": [
+            {"id": "f7", "name": "Outdoor Luas", "icon": "sun"},
+            {"id": "f6", "name": "Estetik", "icon": "camera"},
+            {"id": "f4", "name": "Kopi Susu", "icon": "coffee"}
+        ],
+        "vibes": ["Romantis", "Alam", "Nongkrong"],
+        "ai_summary": "View-nya juara banget kalau malam! Dikelilingi lampu gantung estetik di tengah kebun. Kurang cocok buat nugas, tapi perfect buat nge-date atau nongkrong santai bareng temen.",
+        "rating": 4.5,
+        "reviewCount": 3850,
+        "imageUrl": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=800"
+    },
+
+    {
+        "id": "11",
+        "name": "Kopi Senja",
+        "location": "Jl. Tirta Niaga No.1, Merjosari, Malang",
+        "facilities": [
+            {"id": "f7", "name": "Outdoor Luas", "icon": "sun"},
+            {"id": "f6", "name": "Estetik", "icon": "camera"},
+            {"id": "f4", "name": "Kopi Susu", "icon": "coffee"}
+        ],
+        "vibes": ["Romantis", "Alam", "Nongkrong"],
+        "ai_summary": "Tempatnya asri banget cocok buat santai di sore hari. Lampu gantungnya bikin suasananya jadi lebih hangat.",
+        "rating": 4.4,
+        "reviewCount": 2100,
+        "imageUrl": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=800"
     }
 ]

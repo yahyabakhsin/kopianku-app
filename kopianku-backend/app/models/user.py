@@ -15,6 +15,8 @@ class User(SQLModel, table=True):
     # AI
     preferences: List[str] = Field(default=[], sa_column=Column(JSON))
     persona_badge: Optional[str] = Field(default="Newbie") 
+    bio: Optional[str] = Field(default=None)
+    avatar_url: Optional[str] = Field(default=None)
 
 # Tambahan untuk Sistem Role
     role: str = Field(default="user") # Opsinya nanti: "user", "owner", "admin"
