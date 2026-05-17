@@ -10,7 +10,6 @@ from app.models.user import User
 from app.models.checkin import CheckIn
 from datetime import datetime, timedelta
 from app.models.reservation import Reservation, ReservationCreate
-from transformers import pipeline
 import midtransclient
 from datetime import datetime
 
@@ -19,10 +18,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 optional_security = HTTPBearer(auto_error=False)
 
-# Load model NLP ringan untuk sentimen (proses ini makan waktu beberapa detik pas server baru nyala)
-print("Loading AI Model... Sabar bang...")
-sentiment_analyzer = pipeline("sentiment-analysis")
-print("AI Model Ready!")
+
 
 # Setup Midtrans (Gunakan Sandbox untuk Testing)
 # Idealnya Server Key ini ditaruh di file .env, tapi buat malam ini kita hajar hardcode dulu
