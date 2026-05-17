@@ -8,10 +8,7 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-1 space-y-4">
             <Link href="/" className="flex items-center gap-2">
-              <div className="bg-amber-600 p-1.5 rounded-lg">
-                <Coffee className="h-5 w-5 text-white" />
-              </div>
-              <span className="font-bold text-xl tracking-tight">KopianKu</span>
+              <img src="/logo.png" alt="KopianKu Logo" className="h-8 w-auto invert" />
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed">
               Temukan tempat ngopi dengan vibe yang pas. Dari spot WFC yang tenang sampai kafe estetik buat nongkrong.

@@ -9,6 +9,13 @@ import { ArrowLeft, Calendar, Clock, Users, CreditCard, CheckCircle2, ChevronRig
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import axios from "axios"; 
+import Script from "next/script";
+
+declare global {
+  interface Window {
+    snap: any;
+  }
+}
 
 export default function ReservationPage() {
   const params = useParams();
@@ -16,12 +23,14 @@ export default function ReservationPage() {
   const id = params.id as string;
   const baseId = id.replace("-copy", "");
 
+  const [cafeData, setCafeData] = useState<any>(null);
   const [cafeName, setCafeName] = useState("Loading Kafe...");
+  
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [formData, setFormData] = useState({
     date: "",
     time: "",
-    duration: "1",
+    endTime: "",
     guests: "2",
     name: "Ahmad Jago",
     phone: "081234567890",
@@ -29,11 +38,15 @@ export default function ReservationPage() {
   });
   const [isProcessing, setIsProcessing] = useState(false);
   const [reservationData, setReservationData] = useState<any>(null);
+  const [showDummyPayment, setShowDummyPayment] = useState(false);
 
-  // Ambil Nama Kafe Asli
+  // Ambil Data Kafe Asli
   useEffect(() => {
     axios.get(`http://localhost:8000/api/cafes/${baseId}`)
-      .then(res => setCafeName(res.data.name))
+      .then(res => {
+        setCafeData(res.data);
+        setCafeName(res.data.name);
+      })
       .catch(() => setCafeName(`Kafe ID: ${baseId}`));
   }, [baseId]);
 
@@ -51,8 +64,20 @@ export default function ReservationPage() {
         return;
       }
 
+      if (!formData.time || !formData.endTime) {
+        alert("Pilih Jam Mulai dan Jam Selesai!");
+        setIsProcessing(false);
+        return;
+      }
+      
       const startHour = parseInt(formData.time.split(':')[0]);
-      const endTimeFormatted = `${(startHour + parseInt(formData.duration)).toString().padStart(2, '0')}:00`;
+      const endHour = parseInt(formData.endTime.split(':')[0]);
+      
+      if (endHour <= startHour) {
+        alert("Jam Selesai harus lebih besar dari Jam Mulai!");
+        setIsProcessing(false);
+        return;
+      }
 
       try {
         const response = await axios.post(
@@ -60,23 +85,58 @@ export default function ReservationPage() {
           {
             booking_date: formData.date,
             start_time: formData.time,
-            end_time: endTimeFormatted,
+            end_time: formData.endTime,
             guest_count: parseInt(formData.guests)
           },
           { headers: { "Authorization": `Bearer ${token}` } }
         );
 
         setReservationData(response.data);
-        if (response.data.payment_url) {
-            window.open(response.data.payment_url, '_blank');
+        
+        if (response.data.payment_token) {
+          // Bypassing Snap for hackathon demo if token is dummy
+          if (response.data.payment_token === "dummy-token-12345") {
+            setShowDummyPayment(true);
+            setIsProcessing(false);
+            return;
+          }
+
+          // Panggil Snap.js
+          if (window.snap) {
+            window.snap.pay(response.data.payment_token, {
+              onSuccess: function (result: any) {
+                console.log("Pembayaran Sukses!", result);
+                setStep(3);
+                setIsProcessing(false);
+              },
+              onPending: function (result: any) {
+                console.log("Pembayaran Pending!", result);
+                setStep(3);
+                setIsProcessing(false);
+              },
+              onError: function (result: any) {
+                console.log("Pembayaran Gagal!", result);
+                alert("Pembayaran Gagal: " + result.status_message);
+                setIsProcessing(false);
+              },
+              onClose: function () {
+                console.log("Tutup popup tanpa bayar");
+                setIsProcessing(false);
+              }
+            });
+          } else {
+            console.error("Snap.js belum terload");
+            setIsProcessing(false);
+          }
+        } else {
+          setStep(3);
+          setIsProcessing(false);
         }
-        setStep(3);
 
       } catch (error: any) {
         const errorMsg = error.response?.data?.detail || "Sistem error bang.";
         alert("Waduh, Gagal Booking:\n\n" + errorMsg);
         if (error.response?.status === 400) setStep(1);
-      } finally {
         setIsProcessing(false);
       }
     }
@@ -84,6 +144,11 @@ export default function ReservationPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50 pb-20">
+      <Script 
+        src="https://app.sandbox.midtrans.com/snap/snap.js" 
+        data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || "SB-Mid-client-XXXXX"} 
+        strategy="lazyOnload" 
+      />
       <div className="bg-white border-b border-zinc-100 py-6 sticky top-0 z-50">
         <div className="container mx-auto max-w-screen-md px-4 flex items-center justify-between">
           <Link href={`/cafe/${id}`} className="flex items-center text-sm font-medium text-zinc-500 hover:text-black transition-colors">
@@ -145,30 +210,76 @@ export default function ReservationPage() {
                 <div className="space-y-3">
                   <label className="text-sm font-semibold text-zinc-700">Slot Jam Mulai</label>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                    {/* KLIK SALAH SATU JAM INI BIAR TOMBOL NYALA */}
-                    {["09:00", "10:00", "11:00", "13:00", "14:00", "15:00"].map((t) => (
-                      <button
-                        key={t} type="button"
-                        onClick={() => setFormData({...formData, time: t})}
-                        className={`py-3 rounded-xl text-sm font-bold border-2 transition-all ${
-                          formData.time === t ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-zinc-200 bg-white text-black'
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
+                    {Array.from({length: 13}, (_, i) => `${(i + 9).toString().padStart(2, '0')}:00`).map((t) => {
+                      let isFull = false;
+                      if (cafeData?.full_date && cafeData?.full_start_time && cafeData?.full_end_time) {
+                        if (formData.date === cafeData.full_date) {
+                          if (cafeData.full_start_time <= cafeData.full_end_time) {
+                            isFull = t >= cafeData.full_start_time && t <= cafeData.full_end_time;
+                          } else {
+                            isFull = t >= cafeData.full_start_time || t <= cafeData.full_end_time;
+                          }
+                        }
+                      }
+                      
+                      return (
+                        <button
+                          key={t} type="button"
+                          disabled={isFull}
+                          onClick={() => setFormData({...formData, time: t})}
+                          className={`py-3 rounded-xl text-sm font-bold border-2 transition-all relative overflow-hidden ${
+                            isFull ? 'bg-zinc-100 border-zinc-200 text-zinc-400 cursor-not-allowed' :
+                            formData.time === t ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-zinc-200 bg-white text-black hover:border-amber-200'
+                          }`}
+                        >
+                          {t}
+                          {isFull && <div className="absolute top-0 right-0 bg-red-500 text-[8px] text-white px-1 font-bold">FULL</div>}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <label className="text-sm font-semibold text-zinc-700">Durasi (Jam)</label>
-                    <Input type="number" min="1" max="8" value={formData.duration} onChange={(e) => setFormData({...formData, duration: e.target.value})} className="h-12 rounded-xl" />
+                <div className="space-y-3">
+                  <label className="text-sm font-semibold text-zinc-700">Slot Jam Selesai</label>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                    {Array.from({length: 13}, (_, i) => `${(i + 9).toString().padStart(2, '0')}:00`).map((t) => {
+                      let isFull = false;
+                      if (cafeData?.full_date && cafeData?.full_start_time && cafeData?.full_end_time) {
+                        if (formData.date === cafeData.full_date) {
+                          if (cafeData.full_start_time <= cafeData.full_end_time) {
+                            isFull = t > cafeData.full_start_time && t <= cafeData.full_end_time;
+                          } else {
+                            isFull = t > cafeData.full_start_time || t <= cafeData.full_end_time;
+                          }
+                        }
+                      }
+                      
+                      const startHour = formData.time ? parseInt(formData.time.split(':')[0]) : 0;
+                      const currentHour = parseInt(t.split(':')[0]);
+                      const isDisabled = isFull || (formData.time && currentHour <= startHour);
+
+                      return (
+                        <button
+                          key={t} type="button"
+                          disabled={isDisabled}
+                          onClick={() => setFormData({...formData, endTime: t})}
+                          className={`py-3 rounded-xl text-sm font-bold border-2 transition-all relative overflow-hidden ${
+                            isDisabled ? 'bg-zinc-100 border-zinc-200 text-zinc-400 cursor-not-allowed' :
+                            formData.endTime === t ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-zinc-200 bg-white text-black hover:border-amber-200'
+                          }`}
+                        >
+                          {t}
+                          {isFull && <div className="absolute top-0 right-0 bg-red-500 text-[8px] text-white px-1 font-bold">FULL</div>}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="space-y-3">
-                    <label className="text-sm font-semibold text-zinc-700">Jumlah Orang</label>
-                    <Input type="number" min="1" max="6" value={formData.guests} onChange={(e) => setFormData({...formData, guests: e.target.value})} className="h-12 rounded-xl" />
-                  </div>
+                </div>
+
+                <div className="space-y-3 mt-4">
+                  <label className="text-sm font-semibold text-zinc-700">Jumlah Orang</label>
+                  <Input type="number" min="1" max="6" value={formData.guests} onChange={(e) => setFormData({...formData, guests: e.target.value})} className="h-12 rounded-xl" />
                 </div>
               </div>
 
@@ -193,11 +304,47 @@ export default function ReservationPage() {
               </div>
             </Card>
 
-            <form onSubmit={handleNext} className="space-y-4">
-              <Button type="submit" disabled={isProcessing} className="w-full bg-blue-600 text-white rounded-full h-14 font-bold text-lg">
-                {isProcessing ? "Menghubungi Server..." : `Bayar Rp ${(parseInt(formData.guests) * 50000).toLocaleString()}`}
-              </Button>
-            </form>
+            {showDummyPayment ? (
+              <div className="bg-white p-8 rounded-[2rem] shadow-sm text-center border border-zinc-100 flex flex-col items-center">
+                <h3 className="font-bold text-lg mb-2 text-zinc-800">Scan QRIS (Simulasi)</h3>
+                <p className="text-sm text-zinc-500 mb-6">Demo Mode: Tidak memotong saldo asli</p>
+                
+                {/* Fake QR Code using CSS/SVG */}
+                <div className="w-48 h-48 bg-white border-4 border-zinc-100 rounded-xl flex items-center justify-center p-2 mb-6">
+                  <div className="w-full h-full border-[12px] border-zinc-800 rounded relative">
+                    <div className="absolute top-2 left-2 w-8 h-8 bg-zinc-800"></div>
+                    <div className="absolute top-2 right-2 w-8 h-8 bg-zinc-800"></div>
+                    <div className="absolute bottom-2 left-2 w-8 h-8 bg-zinc-800"></div>
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-zinc-800 rounded-full"></div>
+                    <div className="w-full h-full flex flex-wrap gap-1 p-3">
+                      {Array.from({length: 16}).map((_, i) => (
+                        <div key={i} className="w-4 h-4 bg-zinc-800 opacity-80" style={{visibility: Math.random() > 0.5 ? 'visible' : 'hidden'}}></div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <Button 
+                  onClick={() => {
+                    setIsProcessing(true);
+                    setTimeout(() => {
+                      setStep(3);
+                      setIsProcessing(false);
+                    }, 1000);
+                  }}
+                  disabled={isProcessing} 
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-full h-14 font-bold text-lg transition-colors"
+                >
+                  {isProcessing ? "Memproses..." : "Klik Bayar (Simulasi Sukses)"}
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={handleNext} className="space-y-4">
+                <Button type="submit" disabled={isProcessing} className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-full h-14 font-bold text-lg transition-colors">
+                  {isProcessing ? "Menghubungi Server..." : `Bayar Rp ${(parseInt(formData.guests) * 50000).toLocaleString()}`}
+                </Button>
+              </form>
+            )}
           </div>
         )}
 

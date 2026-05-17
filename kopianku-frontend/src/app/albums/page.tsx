@@ -60,7 +60,7 @@ export default function AlbumsPage() {
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Koleksi Album</h1>
               </div>
               <p className="text-zinc-500 max-w-xl">
-                Simpan dan kelompokkan kafe favorit lo. Bikin album *public* biar bisa disontek sama temen-temen lo.
+                Simpan dan kelompokkan kafe favorit kamu. Bikin album *public* biar bisa disontek sama temen-temen kamu.
               </p>
             </div>
             <Button 
@@ -78,7 +78,7 @@ export default function AlbumsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
           
           {loading && <p className="text-zinc-500">Memuat album...</p>}
-          {!loading && albums.length === 0 && <p className="text-zinc-500">Lo belum punya album. Bikin satu yuk!</p>}
+          {!loading && albums.length === 0 && <p className="text-zinc-500">Kamu belum punya album. Bikin satu yuk!</p>}
           {albums.map((album) => {
             // Kita pakai gambar placeholder karena backend belum ada relasi gambar album utuh
             const images = ["https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=400"];
@@ -143,7 +143,7 @@ export default function AlbumsPage() {
                 <FolderHeart className="w-6 h-6" />
               </div>
               <h2 className="text-2xl font-bold mb-1">Buat Album Baru</h2>
-              <p className="text-sm text-zinc-500">Kelompokkan spot ngopi favorit lo biar gampang dicari.</p>
+              <p className="text-sm text-zinc-500">Kelompokkan spot ngopi favorit kamu biar gampang dicari.</p>
             </div>
 
             <form onSubmit={handleCreateAlbum} className="space-y-4">

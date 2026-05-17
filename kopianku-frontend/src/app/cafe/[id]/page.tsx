@@ -8,6 +8,8 @@ import Link from "next/link";
 import { CheckInModal } from "@/features/cafes/components/CheckInModal";
 
 import { WishlistButton } from "@/features/cafes/components/WishlistButton";
+import { AddToAlbumButton } from "@/features/cafes/components/AddToAlbumButton";
+import { PersonalizedView } from "./PersonalizedView";
 
 const getIcon = (name?: string) => {
   switch (name?.toLowerCase()) {
@@ -77,6 +79,7 @@ export default async function CafeDetailPage({
           </Link>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" className="rounded-full"><Share className="w-5 h-5" /></Button>
+            <AddToAlbumButton cafeId={cafe.id} />
             <WishlistButton cafeId={cafe.id} />
           </div>
         </div>
@@ -85,7 +88,7 @@ export default async function CafeDetailPage({
       {/* Hero Image */}
       <div className="relative w-full h-[40vh] md:h-[50vh] bg-zinc-200">
         <Image 
-          src={cafe.image_url || "https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=2047&auto=format&fit=crop"} 
+          src={cafe.imageUrl || "https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=2047&auto=format&fit=crop"} 
           alt={cafe.name} fill priority className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
@@ -126,7 +129,7 @@ export default async function CafeDetailPage({
               <p className="text-lg text-purple-900/80 leading-relaxed font-medium mb-6">
                 "{aiData.conclusion}"
               </p>
-              <div className="space-y-3 z-10 relative">
+              <div className="space-y-3">
                  <div className="flex items-center gap-4">
                    <span className="w-20 text-sm font-semibold text-green-700">Positif</span>
                    <div className="flex-1 h-2 bg-purple-200/50 rounded-full overflow-hidden">
@@ -145,18 +148,8 @@ export default async function CafeDetailPage({
              <Sparkles className="absolute -right-4 -bottom-4 w-32 h-32 text-purple-500/10 z-0" />
           </section>
 
-          {/* Fasilitas */}
-          <section>
-            <h2 className="text-2xl font-bold mb-6">Fasilitas Tersedia</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {(cafe.facilities || []).map((fac: any, index: number) => (
-                <div key={index} className="border border-zinc-200 rounded-2xl p-4 flex flex-col items-center justify-center text-center hover:border-amber-500 transition-colors bg-zinc-50">
-                  {getIcon(fac.name || fac)} 
-                  <span className="text-sm font-semibold text-zinc-700">{fac.name || fac}</span>
-                </div>
-              ))}
-            </div>
-          </section>
+          {/* Fasilitas dengan Match Score */}
+          <PersonalizedView cafeId={cafe.id} initialFacilities={cafe.facilities || []} />
         </div>
 
         {/* Sidebar */}

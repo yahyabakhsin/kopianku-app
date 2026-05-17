@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Settings, MapPin, Link as LinkIcon, Calendar, Star, Coffee, FolderHeart, Activity, Gift } from "lucide-react";
+import { Settings, MapPin, Link as LinkIcon, Calendar, Star, Coffee, FolderHeart, Activity, Gift, Heart, Users, TrendingUp } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { CafeCard } from "@/features/cafes/components/CafeCard";
@@ -20,6 +20,17 @@ export default function ProfilePage() {
   const [reservations, setReservations] = useState<any[]>([]);
   const [wishlist, setWishlist] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activityFilter, setActivityFilter] = useState("all");
+  const [showFollowModal, setShowFollowModal] = useState(false);
+  const [followModalType, setFollowModalType] = useState<"Pengikut" | "Mengikuti">("Pengikut");
+  const [followsData, setFollowsData] = useState<{followers: any[], following: any[]}>({followers: [], following: []});
+  const [showAlbumModal, setShowAlbumModal] = useState(false);
+  const [newAlbumTitle, setNewAlbumTitle] = useState("");
+  const [newAlbumDesc, setNewAlbumDesc] = useState("");
+  
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editForm, setEditForm] = useState({ username: "", persona: "", avatar_url: "", bio: "" });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -29,13 +40,14 @@ export default function ProfilePage() {
 
         const headers = { Authorization: `Bearer ${token}` };
         
-        const [profileRes, actRes, topRes, albumRes, resvRes, wishlistRes] = await Promise.all([
+        const [profileRes, actRes, topRes, albumRes, resvRes, wishlistRes, followsRes] = await Promise.all([
           apiClient.get('/users/me', { headers }),
           apiClient.get('/users/me/activities', { headers }),
           apiClient.get('/users/me/top-cafes', { headers }),
           apiClient.get('/albums', { headers }),
           apiClient.get('/users/me/reservations', { headers }),
-          apiClient.get('/users/me/wishlist', { headers })
+          apiClient.get('/users/me/wishlist', { headers }),
+          apiClient.get('/users/me/follows', { headers })
         ]);
 
         setUserProfile(profileRes.data);
@@ -44,6 +56,7 @@ export default function ProfilePage() {
         setAlbums(albumRes.data);
         setReservations(resvRes.data);
         setWishlist(wishlistRes.data);
+        setFollowsData(followsRes.data);
       } catch (error) {
         console.error("Gagal load profile", error);
       } finally {
@@ -52,6 +65,84 @@ export default function ProfilePage() {
     };
     fetchProfileData();
   }, []);
+
+  const handleCreateAlbum = async () => {
+    if (!newAlbumTitle.trim()) return alert("Nama album nggak boleh kosong bang!");
+    
+    try {
+      const token = localStorage.getItem("token");
+      await apiClient.post('/albums', {
+        title: newAlbumTitle,
+        description: newAlbumDesc,
+        is_public: true
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setShowAlbumModal(false);
+      setNewAlbumTitle("");
+      setNewAlbumDesc("");
+      
+      // Refresh albums
+      const res = await apiClient.get('/albums', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAlbums(res.data);
+    } catch (error) {
+      console.error("Gagal bikin album", error);
+    }
+  };
+
+  const handleEditProfile = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      
+      let finalAvatarUrl = editForm.avatar_url;
+      
+      if (avatarFile) {
+        const formData = new FormData();
+        formData.append("file", avatarFile);
+        
+        const uploadRes = await apiClient.post('/auth/upload-avatar', formData, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        finalAvatarUrl = uploadRes.data.url_gambar;
+      }
+      
+      const payload = {
+        username: editForm.username,
+        persona_badge: editForm.persona,
+        avatar_url: finalAvatarUrl,
+        bio: editForm.bio
+      };
+
+      const res = await apiClient.put('/users/me', payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Update local state
+      setUserProfile((prev: any) => ({
+        ...prev,
+        username: res.data.user.username,
+        persona: payload.persona_badge,
+        bio: payload.bio,
+        avatar_url: res.data.user.avatar_url
+      }));
+      
+      setShowEditProfile(false);
+      
+      // Trigger navbar update
+      window.dispatchEvent(new Event('user-login'));
+      
+    } catch (error) {
+      console.error("Gagal edit profile", error);
+      alert("Gagal edit profil bang!");
+    }
+  };
 
   if (loading) return <div className="p-10 text-center">Loading profile...</div>;
   if (!userProfile) return <div className="p-10 text-center">Lo belum login bang!</div>;
@@ -62,9 +153,12 @@ export default function ProfilePage() {
       {/* Profile Header (Cover & Basic Info) */}
       <div className="bg-white border-b border-zinc-200">
         {/* Cover Photo */}
-        <div className="h-48 md:h-64 w-full bg-gradient-to-r from-amber-100 via-orange-100 to-purple-100 relative">
+        <div className={`h-48 md:h-64 w-full relative ${userProfile.role === 'owner' ? 'bg-gradient-to-r from-zinc-900 to-black' : 'bg-gradient-to-r from-amber-100 via-orange-100 to-purple-100'}`}>
           <div className="absolute inset-0 bg-black/5" />
-          <Button variant="secondary" size="sm" className="absolute bottom-4 right-4 bg-white/80 backdrop-blur shadow-sm">
+          {userProfile.role === 'owner' && (
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20"></div>
+          )}
+          <Button variant="secondary" size="sm" className="absolute bottom-4 right-4 bg-white/80 backdrop-blur shadow-sm hover:bg-white text-black font-semibold">
             Edit Cover
           </Button>
         </div>
@@ -74,22 +168,37 @@ export default function ProfilePage() {
           {/* Avatar & Actions */}
           <div className="flex justify-between items-end -mt-16 md:-mt-20 mb-4">
             <Avatar className="w-32 h-32 md:w-40 md:h-40 border-4 border-white shadow-lg bg-white">
-              <AvatarImage src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400" />
-              <AvatarFallback className="text-4xl bg-zinc-800 text-white">NK</AvatarFallback>
+              {userProfile.avatar_url && <AvatarImage src={userProfile.avatar_url} />}
+              <AvatarFallback className="text-4xl bg-zinc-800 text-white">{userProfile.username?.[0]?.toUpperCase()}</AvatarFallback>
             </Avatar>
 
-            <div className="flex gap-3 mb-2 md:mb-4">
+            <div className="flex flex-wrap gap-3 mb-2 md:mb-4">
+              {userProfile.role === "owner" && (
+                <Link href="/business">
+                  <Button className="rounded-full font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-transform hover:scale-105">
+                    <TrendingUp className="w-4 h-4 mr-2" /> Business Dashboard
+                  </Button>
+                </Link>
+              )}
               <Button variant="outline" className="rounded-full font-semibold border-zinc-300">
                 Bagikan Profil
               </Button>
-              <Button className="rounded-full bg-black hover:bg-zinc-800 text-white">
+              <Button 
+                onClick={() => {
+                  setEditForm({ username: userProfile.username, persona: userProfile.persona || "", avatar_url: userProfile.avatar_url || "", bio: userProfile.bio || "" });
+                  setAvatarFile(null);
+                  setShowEditProfile(true);
+                }}
+                className="rounded-full bg-black hover:bg-zinc-800 text-white"
+              >
                 <Settings className="w-4 h-4 mr-2" /> Edit Profil
               </Button>
               <Button 
                 variant="destructive" 
-                className="rounded-full font-semibold bg-red-500 hover:bg-red-600"
+                className="rounded-full font-semibold bg-red-500 hover:bg-red-600 text-white"
                 onClick={() => {
                   localStorage.removeItem("token");
+                  window.dispatchEvent(new Event('user-logout'));
                   window.location.href = "/";
                 }}
               >
@@ -103,8 +212,17 @@ export default function ProfilePage() {
             <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
               {userProfile.username} 
               <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-none">{userProfile.persona || 'Newbie'}</Badge>
+              {userProfile.role === "owner" && (
+                <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-none ml-1">Kopianku Owner</Badge>
+              )}
             </h1>
             <p className="text-zinc-500 font-medium mb-3">{userProfile.email} • Bergabung sejak 2024</p>
+            
+            {userProfile.bio && (
+              <p className="text-zinc-800 leading-relaxed mb-3 text-sm italic border-l-2 border-amber-500 pl-3">
+                "{userProfile.bio}"
+              </p>
+            )}
             
             <p className="text-zinc-700 leading-relaxed mb-4">
               {userProfile.preferences?.join(", ") || "Belum ada preferensi. Coba isi onboarding lagi."}
@@ -117,16 +235,16 @@ export default function ProfilePage() {
 
             {/* Followers / Following */}
             <div className="flex gap-6 mt-6">
-              <div className="flex flex-col">
-                <span className="font-bold text-lg text-black">{userProfile.stats?.followers || 0}</span>
+              <div className="flex flex-col cursor-pointer group" onClick={() => { setFollowModalType("Pengikut"); setShowFollowModal(true); }}>
+                <span className="font-bold text-lg text-black group-hover:text-amber-600 transition-colors">{userProfile.stats?.followers || 0}</span>
                 <span className="text-sm text-zinc-500 font-medium">Pengikut</span>
               </div>
-              <div className="flex flex-col">
-                <span className="font-bold text-lg text-black">{userProfile.stats?.following || 0}</span>
+              <div className="flex flex-col cursor-pointer group" onClick={() => { setFollowModalType("Mengikuti"); setShowFollowModal(true); }}>
+                <span className="font-bold text-lg text-black group-hover:text-amber-600 transition-colors">{userProfile.stats?.following || 0}</span>
                 <span className="text-sm text-zinc-500 font-medium">Mengikuti</span>
               </div>
-              <div className="flex flex-col">
-                <span className="font-bold text-lg text-black">{userProfile.stats?.reviews_count || 0}</span>
+              <div className="flex flex-col cursor-pointer group" onClick={() => { setActiveTab("activity"); setActivityFilter("review"); setTimeout(() => window.scrollTo({top: 500, behavior: "smooth"}), 100); }}>
+                <span className="font-bold text-lg text-black group-hover:text-amber-600 transition-colors">{userProfile.stats?.reviews_count || 0}</span>
                 <span className="text-sm text-zinc-500 font-medium">Review</span>
               </div>
             </div>
@@ -138,23 +256,27 @@ export default function ProfilePage() {
       <div className="container mx-auto max-w-screen-xl px-4 md:px-8 mt-8">
         
         {/* Wrapped Promo Banner */}
-        <Card className="mb-8 rounded-[2rem] bg-gradient-to-r from-purple-600 to-indigo-600 border-none shadow-md overflow-hidden relative">
-          <div className="absolute right-0 top-0 w-64 h-64 bg-white/10 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2" />
-          <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
-            <div>
-              <Badge className="bg-white/20 text-white border-none mb-3 hover:bg-white/30 backdrop-blur">EKSKLUSIF</Badge>
-              <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
-                <Gift className="w-6 h-6" /> KopianKu Wrapped 2026
-              </h2>
-              <p className="text-purple-100 max-w-xl">
-                Lihat kilas balik perjalanan ngopi lo selama setahun. Total 42 kafe, 150 gelas kopi, dan 1 kafe favorit yang paling sering lo kunjungin!
-              </p>
-            </div>
-            <Button className="bg-white text-purple-700 hover:bg-zinc-100 rounded-full font-bold px-8 h-12 shrink-0 shadow-lg transition-transform hover:scale-105">
-              Lihat Wrapped
-            </Button>
-          </CardContent>
-        </Card>
+        {userProfile.role !== "owner" && (
+          <Card className="mb-8 rounded-[2rem] bg-gradient-to-r from-purple-600 to-indigo-600 border-none shadow-md overflow-hidden relative">
+            <div className="absolute right-0 top-0 w-64 h-64 bg-white/10 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2" />
+            <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
+              <div>
+                <Badge className="bg-white/20 text-white border-none mb-3 hover:bg-white/30 backdrop-blur">EKSKLUSIF</Badge>
+                <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
+                  <Gift className="w-6 h-6" /> KopianKu Wrapped 2026
+                </h2>
+                <p className="text-purple-100 max-w-xl">
+                  Cek rangkuman nongkrong lo di tahun ini! Ada 42 kafe yang udah lo kunjungin, dan 1 kafe yang jadi tempat langganan lo.
+                </p>
+              </div>
+              <Link href="/wrapped">
+                <Button className="bg-white text-purple-700 hover:bg-zinc-100 rounded-full font-bold px-8 h-12 shrink-0 shadow-lg transition-transform hover:scale-105">
+                  Lihat Wrapped
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Custom Tabs List */}
         <div className="flex overflow-x-auto border-b border-zinc-200 mb-8 gap-8 hide-scrollbar">
@@ -197,9 +319,12 @@ export default function ProfilePage() {
               <h3 className="text-xl font-bold flex items-center gap-2">
                 <Star className="w-5 h-5 text-amber-500" /> Showcase Utama
               </h3>
-              <Button variant="ghost" className="text-amber-600 hover:bg-amber-50 rounded-full">
-                Edit Pilihan
-              </Button>
+              <div 
+                className="text-xs bg-amber-50 text-amber-600 px-4 py-2 rounded-full border border-amber-200 font-medium"
+                title="Kafe di-generate otomatis berdasarkan review bintang tinggi yang lo kasih."
+              >
+                Otomatis dari Favoritmu
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {topCafes.map((cafe) => (
@@ -226,7 +351,7 @@ export default function ProfilePage() {
                 </Link>
               ))}
 
-              <div className="group cursor-pointer block flex items-center justify-center border-2 border-dashed border-zinc-200 hover:border-amber-500 rounded-[2rem] aspect-[4/3] bg-zinc-50 transition-colors">
+              <div onClick={() => setShowAlbumModal(true)} className="group cursor-pointer block flex items-center justify-center border-2 border-dashed border-zinc-200 hover:border-amber-500 rounded-[2rem] aspect-[4/3] bg-zinc-50 transition-colors">
                 <div className="text-center text-zinc-500 group-hover:text-amber-600 transition-colors">
                   <FolderHeart className="w-10 h-10 mx-auto mb-2 opacity-50 group-hover:opacity-100" />
                   <span className="font-bold">Buat Album Baru</span>
@@ -245,9 +370,9 @@ export default function ProfilePage() {
                 <div>
                   <h4 className="font-semibold text-sm mb-3 uppercase tracking-wider text-zinc-500">Filter Histori</h4>
                   <div className="space-y-2">
-                    <Button variant="secondary" className="w-full justify-start rounded-xl font-medium bg-zinc-100">Semua Aktivitas</Button>
-                    <Button variant="ghost" className="w-full justify-start rounded-xl font-medium text-zinc-500">Hanya Review</Button>
-                    <Button variant="ghost" className="w-full justify-start rounded-xl font-medium text-zinc-500">Hanya Check-in</Button>
+                    <Button variant={activityFilter === "all" ? "secondary" : "ghost"} onClick={() => setActivityFilter("all")} className={`w-full justify-start rounded-xl font-medium ${activityFilter === "all" ? "bg-zinc-100" : "text-zinc-500"}`}>Semua Aktivitas</Button>
+                    <Button variant={activityFilter === "review" ? "secondary" : "ghost"} onClick={() => setActivityFilter("review")} className={`w-full justify-start rounded-xl font-medium ${activityFilter === "review" ? "bg-zinc-100" : "text-zinc-500"}`}>Hanya Review</Button>
+                    <Button variant={activityFilter === "checkin" ? "secondary" : "ghost"} onClick={() => setActivityFilter("checkin")} className={`w-full justify-start rounded-xl font-medium ${activityFilter === "checkin" ? "bg-zinc-100" : "text-zinc-500"}`}>Hanya Check-in</Button>
                   </div>
                 </div>
                 <div>
@@ -261,8 +386,8 @@ export default function ProfilePage() {
 
               {/* Activity Feed (Right) */}
               <div className="flex-1 space-y-6">
-                {activities.length === 0 && <p className="text-zinc-500">Belum ada aktivitas nih. Mulai explore kafe yuk!</p>}
-                {activities.map((item, idx) => (
+                {activities.filter(a => activityFilter === "all" || a.type === activityFilter).length === 0 && <p className="text-zinc-500">Belum ada aktivitas yang sesuai.</p>}
+                {activities.filter(a => activityFilter === "all" || a.type === activityFilter).map((item, idx) => (
                   <Card key={idx} className="rounded-2xl border-none shadow-sm bg-white p-6">
                     <div className="flex items-start gap-4">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
@@ -362,6 +487,113 @@ export default function ProfilePage() {
         )}
 
       </div>
+
+      {/* Follower Modal */}
+      {showFollowModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowFollowModal(false)}>
+          <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-xl mb-6">{followModalType}</h3>
+            <div className="space-y-4 max-h-64 overflow-y-auto">
+              {(followModalType === "Pengikut" ? followsData.followers : followsData.following).length === 0 ? (
+                <p className="text-zinc-500 text-sm text-center">Belum ada {followModalType.toLowerCase()}</p>
+              ) : (
+                (followModalType === "Pengikut" ? followsData.followers : followsData.following).map((u: any) => (
+                  <Link href={`/profile/${u.id}`} key={u.id} className="flex items-center gap-3 hover:bg-zinc-50 p-2 rounded-xl transition-colors cursor-pointer group" onClick={() => setShowFollowModal(false)}>
+                    <Avatar className="w-10 h-10">
+                      {u.avatar_url ? <AvatarImage src={u.avatar_url} /> : <AvatarFallback className="bg-amber-100 text-amber-700 font-bold">{u.username?.[0]?.toUpperCase()}</AvatarFallback>}
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="font-bold text-sm group-hover:text-amber-600 transition-colors">{u.username}</p>
+                      <p className="text-xs text-zinc-500">{u.persona}</p>
+                    </div>
+                  </Link>
+                ))
+              )}
+            </div>
+            <Button variant="ghost" className="w-full mt-6 text-zinc-500 hover:text-black rounded-full" onClick={() => setShowFollowModal(false)}>Tutup</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Create Album Modal */}
+      {showAlbumModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowAlbumModal(false)}>
+          <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-xl mb-4">Buat Album Baru</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-bold mb-1 block">Nama Album</label>
+                <input type="text" className="w-full border border-zinc-200 rounded-xl px-4 py-2" placeholder="Contoh: WFC Jaksel" value={newAlbumTitle} onChange={e => setNewAlbumTitle(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-bold mb-1 block">Deskripsi (Opsional)</label>
+                <textarea className="w-full border border-zinc-200 rounded-xl px-4 py-2 resize-none" rows={3} placeholder="Tempat enak buat kerja..." value={newAlbumDesc} onChange={e => setNewAlbumDesc(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <Button variant="outline" className="flex-1 rounded-full font-semibold" onClick={() => setShowAlbumModal(false)}>Batal</Button>
+              <Button className="flex-1 rounded-full font-semibold bg-black text-white hover:bg-zinc-800" onClick={handleCreateAlbum}>Simpan</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Profile Modal */}
+      {showEditProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowEditProfile(false)}>
+          <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-xl mb-4">Edit Profil</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-bold mb-1 block">Username</label>
+                <input 
+                  type="text" 
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-2" 
+                  value={editForm.username} 
+                  onChange={e => setEditForm(prev => ({ ...prev, username: e.target.value }))} 
+                />
+              </div>
+              <div>
+                <label className="text-sm font-bold mb-1 block">Persona/Bio Singkat</label>
+                <input 
+                  type="text" 
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-2" 
+                  placeholder="Misal: Si Paling Kopi" 
+                  value={editForm.persona} 
+                  onChange={e => setEditForm(prev => ({ ...prev, persona: e.target.value }))} 
+                />
+              </div>
+              <div>
+                <label className="text-sm font-bold mb-1 block">Bio Lengkap</label>
+                <textarea 
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-2 resize-none" 
+                  rows={3}
+                  placeholder="Ceritain tentang lo..." 
+                  value={editForm.bio} 
+                  onChange={e => setEditForm(prev => ({ ...prev, bio: e.target.value }))} 
+                />
+              </div>
+              <div>
+                <label className="text-sm font-bold mb-1 block">Foto Profil</label>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-2" 
+                  onChange={e => {
+                    if (e.target.files && e.target.files[0]) {
+                      setAvatarFile(e.target.files[0]);
+                    }
+                  }} 
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <Button variant="outline" className="flex-1 rounded-full font-semibold" onClick={() => setShowEditProfile(false)}>Batal</Button>
+              <Button className="flex-1 rounded-full font-semibold bg-black text-white hover:bg-zinc-800" onClick={handleEditProfile}>Simpan</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
