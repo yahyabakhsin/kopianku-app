@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ArrowRight, Laptop, Users, Coffee, Zap, Wifi, Wind } from "lucide-react";
+import axios from "axios";
+import { CheckCircle2, ArrowRight, Laptop, Users, Coffee, Zap, Wifi, Wind, Dog, Croissant, Moon, Sun, Utensils } from "lucide-react";
 
 type QuizStep = {
   question: string;
@@ -25,11 +26,35 @@ const steps: QuizStep[] = [
     ],
   },
   {
+    question: "Biasanya lo ngopi sama siapa?",
+    options: [
+      { id: "sendiri", label: "Sendiri Aja (Solo)", icon: <Coffee className="w-6 h-6 mb-2 text-zinc-500" /> },
+      { id: "bareng", label: "Sama Temen / Pacar", icon: <Users className="w-6 h-6 mb-2 text-blue-500" /> },
+      { id: "pet", label: "Bawa Anabul Kesayangan", icon: <Dog className="w-6 h-6 mb-2 text-amber-600" /> },
+    ],
+  },
+  {
     question: "Fasilitas apa yang WAJIB ada?",
     options: [
       { id: "wifi_plug", label: "Wi-Fi Kenceng & Colokan", icon: <Wifi className="w-6 h-6 mb-2 text-blue-500" /> },
       { id: "smoking", label: "Smoking / Outdoor Area", icon: <Wind className="w-6 h-6 mb-2 text-zinc-500" /> },
       { id: "aesthetic", label: "Desain Estetik (Buat Foto)", icon: <Zap className="w-6 h-6 mb-2 text-pink-500" /> },
+    ],
+  },
+  {
+    question: "Selain kopi, lo biasa nyari apa?",
+    options: [
+      { id: "kopi_susu", label: "Kopi Susu Creamy", icon: <Coffee className="w-6 h-6 mb-2 text-amber-700" /> },
+      { id: "pastry", label: "Pastry & Dessert Enak", icon: <Croissant className="w-6 h-6 mb-2 text-yellow-600" /> },
+      { id: "makanan", label: "Makanan Berat (Kenyang)", icon: <Utensils className="w-6 h-6 mb-2 text-red-500" /> },
+    ],
+  },
+  {
+    question: "Kapan waktu favorit lo ke kafe?",
+    options: [
+      { id: "pagi", label: "Pagi (Sarapan & Morning Coffee)", icon: <Sun className="w-6 h-6 mb-2 text-yellow-500" /> },
+      { id: "sore", label: "Sore (Nyari Senja / Healing)", icon: <Wind className="w-6 h-6 mb-2 text-orange-400" /> },
+      { id: "malam", label: "Tengah Malam (Begadang)", icon: <Moon className="w-6 h-6 mb-2 text-indigo-500" /> },
     ],
   },
 ];
@@ -53,13 +78,55 @@ export function OnboardingQuiz() {
     }, 400);
   };
 
-  const calculatePersona = () => {
+  const calculatePersona = async () => {
     setIsCalculating(true);
-    // Simulate AI persona generation
-    setTimeout(() => {
-      // In a real app, we'd save this to Zustand or backend
-      router.push("/?persona=wfc-warrior");
-    }, 2000);
+    
+    // Pemetaan jawaban ke tag standar backend
+    const tagMap: Record<string, string> = {
+      "wfc": "WFC",
+      "hangout": "Nongkrong",
+      "me-time": "Quiet",
+      "wifi_plug": "WiFi",
+      "smoking": "Outdoor",
+      "aesthetic": "Estetik",
+      "sendiri": "WFC", // as proxy
+      "bareng": "Nongkrong",
+      "pet": "Pet Friendly",
+      "kopi_susu": "Kopi Susu",
+      "pastry": "Pastry Enak",
+      "makanan": "Makanan Enak",
+      "pagi": "Pagi",
+      "sore": "Outdoor Luas",
+      "malam": "Buka 24 Jam"
+    };
+
+    const selectedTags = Object.values(answers).map(id => tagMap[id]).filter(Boolean);
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("Lo harus login dulu bang!");
+        router.push("/login");
+        return;
+      }
+
+      // Nembak API backend
+      await axios.post(
+        "http://localhost:8000/api/auth/onboarding", 
+        selectedTags,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Jeda dramatis buat efek AI
+      setTimeout(() => {
+        router.push("/discover");
+      }, 1500);
+
+    } catch (error) {
+      console.error(error);
+      alert("Gagal nyimpen profil persona lo. Coba lagi ya.");
+      setIsCalculating(false);
+    }
   };
 
   if (isCalculating) {

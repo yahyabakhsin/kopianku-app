@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowRight, Coffee, Star, MapPin, Sparkles, Heart, MessageSquare, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,11 +13,16 @@ import { apiClient } from "@/lib/axios";
 import { Cafe } from "@/features/cafes/types";
 
 export default function HomePage() {
+  const router = useRouter();
   const [cafes, setCafes] = useState<Cafe[]>([]);
   const [feedPosts, setFeedPosts] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isLogged, setIsLogged] = useState(false);
+  
+  // Surprise Me States
+  const [isSurprising, setIsSurprising] = useState(false);
+  const [surprisedCafe, setSurprisedCafe] = useState<any>(null);
 
   // Fetch data dari FastAPI
   useEffect(() => {
@@ -132,14 +137,27 @@ export default function HomePage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 text-sm mb-3">
-                          <span className="text-zinc-500">Check-in di</span>
-                          <Link href={`/cafe/${post.id}`}>
-                            <Badge variant="secondary" className="bg-purple-50 text-purple-700 hover:bg-purple-100 font-bold flex items-center gap-1 cursor-pointer">
-                              <MapPin className="w-3 h-3" /> {post.cafe.name}
-                            </Badge>
-                          </Link>
-                        </div>
+                        {post.cafe && (
+                          <div className="flex items-center gap-2 text-sm mb-3">
+                            <span className="text-zinc-500">Check-in di</span>
+                            <Link href={`/cafe/${post.cafe.id}`}>
+                              <Badge variant="secondary" className="bg-purple-50 text-purple-700 hover:bg-purple-100 font-bold flex items-center gap-1 cursor-pointer">
+                                <MapPin className="w-3 h-3" /> {post.cafe.name}
+                              </Badge>
+                            </Link>
+                          </div>
+                        )}
+
+                        {post.album && (
+                          <div className="flex items-center gap-2 text-sm mb-3">
+                            <span className="text-zinc-500">Membagikan album</span>
+                            <Link href={`/albums/${post.album.id}`}>
+                              <Badge variant="secondary" className="bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold flex items-center gap-1 cursor-pointer">
+                                📚 {post.album.title}
+                              </Badge>
+                            </Link>
+                          </div>
+                        )}
 
                         <p className="text-zinc-700 leading-relaxed text-sm mb-4">
                           {post.content}
@@ -177,39 +195,90 @@ export default function HomePage() {
                   </div>
                   
                   <div className="space-y-5">
-                    {[
-                      { name: "Dimas A.", action: "Lagi WFC di", cafe: "15th Coffee Kemang", time: "10 mnt lalu", avatar: "D" },
-                      { name: "Siti F.", action: "Baru review", cafe: "Toko Kopi Tuku", time: "25 mnt lalu", avatar: "S" },
-                      { name: "Kevin W.", action: "Lagi nongkrong di", cafe: "Kopi Nako Tebet", time: "1 jam lalu", avatar: "K" }
-                    ].map((friend, i) => (
-                      <div key={i} className="flex gap-3 group cursor-pointer">
-                        <Avatar className="w-8 h-8 border border-zinc-200">
-                          <AvatarFallback className="bg-zinc-100 text-zinc-600 font-bold text-xs">{friend.avatar}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <p className="font-bold text-sm text-black group-hover:underline">{friend.name}</p>
-                          <p className="text-xs text-zinc-500 line-clamp-1">{friend.action} <span className="font-medium text-black group-hover:text-amber-600 transition-colors">{friend.cafe}</span></p>
-                          <p className="text-[10px] text-zinc-400 mt-0.5">{friend.time}</p>
-                        </div>
-                      </div>
-                    ))}
+                    {loading ? (
+                      <p className="text-xs text-zinc-500">Memuat aktivitas...</p>
+                    ) : feedPosts.filter(post => post.userHasFollowed || (userProfile && post.user.id !== userProfile.id)).slice(0, 5).length > 0 ? (
+                      feedPosts
+                        .filter(post => post.userHasFollowed || (userProfile && post.user.id !== userProfile.id))
+                        .slice(0, 5)
+                        .map((post, i) => {
+                          // Tentukan action text berdasarkan tipe post
+                          let actionText = "Membagikan postingan";
+                          let targetName = "";
+                          
+                          if (post.type === "review") {
+                            actionText = "Baru review";
+                            targetName = post.cafe?.name || "";
+                          } else if (post.type === "checkin") {
+                            actionText = "Lagi nongkrong di";
+                            targetName = post.cafe?.name || "";
+                          } else if (post.album) {
+                            actionText = "Membagikan album";
+                            targetName = post.album.title;
+                          }
+
+                          return (
+                            <Link href={post.cafe ? `/cafe/${post.cafe.id}` : (post.album ? `/albums/${post.album.id}` : `/profile/${post.user.id}`)} key={i} className="flex gap-3 group cursor-pointer">
+                              <Avatar className="w-8 h-8 border border-zinc-200">
+                                <AvatarFallback className="bg-zinc-100 text-zinc-600 font-bold text-xs">{post.user.avatar}</AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1">
+                                <p className="font-bold text-sm text-black group-hover:underline">{post.user.name}</p>
+                                <p className="text-xs text-zinc-500 line-clamp-1">
+                                  {actionText} {targetName && <span className="font-medium text-black group-hover:text-amber-600 transition-colors">{targetName}</span>}
+                                </p>
+                                <p className="text-[10px] text-zinc-400 mt-0.5">{post.time}</p>
+                              </div>
+                            </Link>
+                          );
+                        })
+                    ) : (
+                      <p className="text-xs text-zinc-500">Belum ada aktivitas teman.</p>
+                    )}
                   </div>
                   
-                  <Button variant="ghost" className="w-full mt-4 text-xs font-semibold text-zinc-500 hover:text-black">
-                    Lihat Semua Teman
-                  </Button>
+                  <Link href="/social" className="block w-full mt-4">
+                    <Button variant="ghost" className="w-full text-xs font-semibold text-zinc-500 hover:text-black">
+                      Lihat Semua Teman
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
 
-              <Link href="/discover" className="block">
+              <div 
+                className="block cursor-pointer"
+                onClick={async () => {
+                  try {
+                    setIsSurprising(true);
+                    const token = localStorage.getItem("token");
+                    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+                    const res = await apiClient.get('/cafes/surprise-me', { headers });
+                    
+                    if (res.data && res.data.id) {
+                      setSurprisedCafe(res.data);
+                      // Tunggu 3 detik biar animasinya kerasa
+                      setTimeout(() => {
+                        setIsSurprising(false);
+                        router.push(`/cafe/${res.data.id}`);
+                      }, 3000);
+                    } else {
+                      setIsSurprising(false);
+                      alert("Gagal dapetin rekomendasi kafe!");
+                    }
+                  } catch (e) {
+                    setIsSurprising(false);
+                    alert("Gagal dapetin rekomendasi kafe!");
+                  }
+                }}
+              >
                 <div className="bg-gradient-to-r from-amber-500 to-orange-400 rounded-2xl p-6 text-white shadow-lg shadow-amber-500/20 hover:scale-[1.02] transition-transform">
                   <h3 className="font-bold text-xl mb-1">Mager milih?</h3>
-                  <p className="text-amber-100 text-sm mb-4">Pencet buat dapetin 1 rekomendasi kafe random terdekat.</p>
+                  <p className="text-amber-100 text-sm mb-4">Pencet buat dapetin 1 rekomendasi kafe AI terdekat.</p>
                   <Button variant="secondary" className="w-full rounded-full bg-white text-amber-600 font-bold">
                     Surprise Me! ✨
                   </Button>
                 </div>
-              </Link>
+              </div>
 
               <Card className="rounded-2xl border-none shadow-sm bg-white">
                 <CardContent className="p-5">
@@ -242,6 +311,54 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+
+        {/* Surprise Me Modal Animation */}
+        {isSurprising && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+            <div className="bg-white rounded-[2rem] p-8 max-w-sm w-full mx-4 text-center shadow-2xl relative overflow-hidden">
+              {/* Background Decoration */}
+              <div className="absolute -top-24 -right-24 w-48 h-48 bg-amber-100 rounded-full blur-3xl opacity-50 animate-pulse"></div>
+              <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-100 rounded-full blur-3xl opacity-50 animate-pulse delay-150"></div>
+              
+              <div className="relative z-10 flex flex-col items-center">
+                {surprisedCafe ? (
+                  <>
+                    <div className="w-24 h-24 mb-6 relative animate-in zoom-in duration-500">
+                      <div className="absolute inset-0 bg-green-100 rounded-full flex items-center justify-center">
+                        <Sparkles className="w-12 h-12 text-green-500" />
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-bold mb-2">Ketemu Nih!</h3>
+                    <p className="text-zinc-500 mb-6 text-sm">
+                      Menganalisis preferensi lo... dan ini dia yang paling cocok:
+                    </p>
+                    <div className="bg-zinc-50 p-4 rounded-2xl w-full border border-zinc-100 mb-4 animate-in slide-in-from-bottom-4 duration-500">
+                      <h4 className="font-bold text-lg">{surprisedCafe.name}</h4>
+                      <p className="text-xs text-zinc-500 flex items-center justify-center gap-1 mt-1">
+                        <Star className="w-3 h-3 text-amber-500 fill-amber-500" /> {surprisedCafe.rating}
+                      </p>
+                    </div>
+                    <p className="text-xs text-zinc-400 animate-pulse">Otw ke tekape...</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-24 h-24 mb-6 relative">
+                      <div className="absolute inset-0 border-4 border-amber-100 rounded-full animate-ping"></div>
+                      <div className="absolute inset-2 bg-amber-100 rounded-full flex items-center justify-center animate-pulse">
+                        <Coffee className="w-10 h-10 text-amber-600 animate-bounce" />
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-bold mb-2">Bentar Bang...</h3>
+                    <p className="text-zinc-500 text-sm">
+                      Kopianku AI lagi cari spot nongkrong yang paling pas sama selera lo...
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     );
   }

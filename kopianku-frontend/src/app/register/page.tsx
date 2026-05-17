@@ -7,47 +7,44 @@ import { Card } from "@/components/ui/card";
 import { Coffee, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import axios from "axios";
+import { apiClient } from "@/lib/axios";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      // 1. Bikin Objek JSON biasa. 
-      // Karena ini Pydantic custom, kemungkinan besar dia minta key "email", bukan "username"
-      const payload = {
-        email: email, 
+      // 1. Register
+      await apiClient.post("/auth/register", {
+        username: username,
+        email: email,
         password: password
-      };
+      });
 
-      // 2. Langsung tembak! Nggak usah pusingin Headers, Axios otomatis jadiin ini "application/json"
-      const response = await axios.post("http://localhost:8000/api/auth/login", payload);
+      // 2. Langsung Login otomatis setelah berhasil daftar
+      const loginResponse = await apiClient.post("/auth/login", {
+        email: email,
+        password: password
+      });
       
-      // 3. Simpan token & pindah halaman
-      localStorage.setItem("token", response.data.access_token);
+      // 3. Simpan token
+      localStorage.setItem("token", loginResponse.data.access_token);
       window.dispatchEvent(new Event('user-login'));
-      alert("Login Sukses! Token tersimpan.");
       
-      if (response.data.role === "owner") {
-        router.push("/business");
-      } else if (response.data.has_onboarded) {
-        router.push("/discover");
-      } else {
-        router.push("/onboarding");
-      }
+      // 4. Arahkan ke Onboarding karena ini user baru
+      router.push("/onboarding");
       
     } catch (error: any) {
-      // Biar kalau misal salah password, errornya tetep keliatan jelas
-      const errorDetail = error.response?.data?.detail || error.response?.data;
-      alert("Gagal login:\n" + JSON.stringify(errorDetail, null, 2));
+      const errorDetail = error.response?.data?.detail || error.response?.data || "Terjadi kesalahan";
+      alert("Gagal mendaftar:\n" + JSON.stringify(errorDetail, null, 2));
     } finally {
       setIsLoading(false);
     }
@@ -64,14 +61,26 @@ export default function LoginPage() {
           </div>
         </div>
         
-        <h1 className="text-3xl font-bold text-center tracking-tight mb-2">Selamat Datang</h1>
-        <p className="text-zinc-500 text-center mb-8">Masuk untuk menyimpan profil dan preferensi ngopi lo.</p>
+        <h1 className="text-3xl font-bold text-center tracking-tight mb-2">Buat Akun</h1>
+        <p className="text-zinc-500 text-center mb-8">Daftar sekarang buat dapetin rekomendasi kafe yang sesuai sama vibe lo.</p>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleRegister} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-zinc-700">Email / Username</label>
+            <label className="text-sm font-semibold text-zinc-700">Username</label>
             <Input 
               type="text" 
+              placeholder="Si Paling Kopi" 
+              required
+              className="h-12 rounded-xl bg-zinc-50/50"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-zinc-700">Email</label>
+            <Input 
+              type="email" 
               placeholder="nama@email.com" 
               required
               className="h-12 rounded-xl bg-zinc-50/50"
@@ -81,10 +90,7 @@ export default function LoginPage() {
           </div>
           
           <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <label className="text-sm font-semibold text-zinc-700">Password</label>
-              <Link href="#" className="text-xs text-amber-600 font-medium hover:underline">Lupa password?</Link>
-            </div>
+            <label className="text-sm font-semibold text-zinc-700">Password</label>
             <Input 
               type="password" 
               placeholder="••••••••" 
@@ -100,12 +106,12 @@ export default function LoginPage() {
             disabled={isLoading}
             className="w-full h-12 bg-black hover:bg-zinc-800 text-white rounded-xl font-semibold mt-4"
           >
-            {isLoading ? "Masuk..." : "Masuk"} <ArrowRight className="w-4 h-4 ml-2" />
+            {isLoading ? "Mendaftar..." : "Daftar Sekarang"} <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </form>
 
         <div className="mt-8 text-center text-sm text-zinc-500">
-          Belum punya akun? <Link href="/register" className="text-black font-bold hover:underline">Daftar sekarang</Link>
+          Udah punya akun? <Link href="/login" className="text-black font-bold hover:underline">Masuk di sini</Link>
         </div>
       </Card>
     </div>

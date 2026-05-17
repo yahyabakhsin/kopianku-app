@@ -36,6 +36,12 @@ export function CafeCard({ cafe }: { cafe: Cafe }) {
           <Badge className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md hover:bg-black/80 text-white border-none shadow-sm">
             <Star className="w-3 h-3 text-amber-400 mr-1 fill-amber-400" /> {cafe.rating}
           </Badge>
+
+          {(cafe as any).is_full && (
+            <Badge className="absolute top-3 left-3 z-20 bg-red-600 hover:bg-red-700 text-white border-none shadow-sm font-bold tracking-wider text-[10px]">
+              PENUH
+            </Badge>
+          )}
           
           <div className="absolute bottom-4 left-4 z-20 text-white w-full pr-4">
             <h3 className="font-bold text-xl mb-1 truncate">{cafe.name}</h3>
