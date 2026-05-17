@@ -34,7 +34,7 @@ export default async function CafeDetailPage({
 
   let cafe = null;
   try {
-    const res = await fetch(`http://localhost:8000/api/cafes/${baseId}`, { cache: 'no-store' });
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/cafes/${baseId}`, { cache: 'no-store' });
     if (!res.ok) {
       if (res.status === 404) return notFound();
       throw new Error(`Gagal narik data`);
@@ -47,7 +47,7 @@ export default async function CafeDetailPage({
 
   let aiData = { positive: 85, neutral: 10, negative: 5, conclusion: "Vibe kafenya netral. Ada yang suka, ada yang ngerasa biasa aja." };
   try {
-    const aiRes = await fetch(`http://localhost:8000/api/cafes/${baseId}/ai-summary`, { cache: 'no-store' });
+    const aiRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/cafes/${baseId}/ai-summary`, { cache: 'no-store' });
     if (aiRes.ok) {
       const data = await aiRes.json();
       if (data.sentiment_breakdown) {
@@ -61,7 +61,17 @@ export default async function CafeDetailPage({
       }
     }
   } catch (error) {
-    console.error("Gagal load AI summary", error);
+    console.error("AI Error:", error);
+  }
+
+  let reviews: any[] = [];
+  try {
+    const revRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/cafes/${baseId}/reviews`, { cache: 'no-store' });
+    if (revRes.ok) {
+      reviews = await revRes.json();
+    }
+  } catch (error) {
+    console.error("Gagal narik reviews:", error);
   }
 
   // Karena ini Server Component dan nggak ada cookie JWT, 
@@ -150,6 +160,46 @@ export default async function CafeDetailPage({
 
           {/* Fasilitas dengan Match Score */}
           <PersonalizedView cafeId={cafe.id} initialFacilities={cafe.facilities || []} />
+
+          {/* User Reviews */}
+          <div className="mt-12 pt-8 border-t border-zinc-100">
+            <h3 className="text-2xl font-bold mb-6">Review dari Teman-teman</h3>
+            {reviews.length > 0 ? (
+              <div className="space-y-6">
+                {reviews.map((rev: any, idx: number) => (
+                  <div key={idx} className="bg-white p-6 rounded-2xl border border-zinc-100 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-10 h-10 border-2 border-zinc-100">
+                          <AvatarFallback className="bg-gradient-to-br from-amber-200 to-orange-200 text-amber-900 font-bold">
+                            {rev.username ? rev.username.substring(0, 2).toUpperCase() : "AN"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="font-bold text-sm">{rev.username || "Anonim"}</div>
+                          <div className="text-xs text-zinc-500">
+                            {new Date(rev.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center bg-amber-50 px-2 py-1 rounded-lg">
+                        <Star className="w-4 h-4 text-amber-500 fill-amber-500 mr-1" />
+                        <span className="font-bold text-sm text-amber-700">{rev.rating}/5</span>
+                      </div>
+                    </div>
+                    <p className="text-zinc-700 leading-relaxed text-sm">
+                      {rev.text || "Nggak nulis apa-apa, tapi ngasih rating."}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-zinc-50 rounded-2xl border border-dashed border-zinc-200">
+                <MessageSquare className="w-12 h-12 text-zinc-300 mx-auto mb-3" />
+                <p className="text-zinc-500 font-medium">Belum ada review nih. Jadi yang pertama check-in dan kasih review!</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Sidebar */}

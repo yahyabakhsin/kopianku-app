@@ -59,7 +59,7 @@ export function ChatWidget() {
       }
 
       // 3. Tembak API Backend
-      const response = await fetch(`http://localhost:8000/api/chatbot/ask`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/chatbot/ask`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",

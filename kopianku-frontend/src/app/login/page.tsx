@@ -29,7 +29,7 @@ export default function LoginPage() {
       };
 
       // 2. Langsung tembak! Nggak usah pusingin Headers, Axios otomatis jadiin ini "application/json"
-      const response = await axios.post("http://localhost:8000/api/auth/login", payload);
+      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}//auth/login", payload);
       
       // 3. Simpan token & pindah halaman
       localStorage.setItem("token", response.data.access_token);

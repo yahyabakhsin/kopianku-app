@@ -42,7 +42,7 @@ export default function ReservationPage() {
 
   // Ambil Data Kafe Asli
   useEffect(() => {
-    axios.get(`http://localhost:8000/api/cafes/${baseId}`)
+    axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/cafes/${baseId}`)
       .then(res => {
         setCafeData(res.data);
         setCafeName(res.data.name);
@@ -81,7 +81,7 @@ export default function ReservationPage() {
 
       try {
         const response = await axios.post(
-          `http://localhost:8000/api/cafes/${baseId}/reservations`,
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"}/cafes/${baseId}/reservations`,
           {
             booking_date: formData.date,
             start_time: formData.time,
