@@ -21,8 +21,8 @@ app = FastAPI(title="Kopianku API")
 # 2. Pasang Satpam CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow semua domain (aman untuk lomba)
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow semua domain (untuk lomba)
+    allow_credentials=False,  # Harus False kalau allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
