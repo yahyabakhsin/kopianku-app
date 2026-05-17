@@ -1,8 +1,11 @@
 fastapi
-uvicorn
+uvicorn[standard]
 sqlmodel
 psycopg2-binary
 python-multipart
 python-jose[cryptography]
+PyJWT
 passlib[bcrypt]
 midtransclient
+google-generativeai
+httpx
