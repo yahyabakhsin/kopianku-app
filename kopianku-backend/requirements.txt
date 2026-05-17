@@ -9,3 +9,4 @@ passlib[bcrypt]
 midtransclient
 google-generativeai
 httpx
+transformers
