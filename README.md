@@ -2,8 +2,7 @@
 
 Kopianku adalah platform inovatif berbasis web yang membantu pengguna menemukan kafe terbaik untuk bekerja (WFC), nongkrong, atau nugas. Dilengkapi dengan fitur asisten AI, reservasi tempat (booking), dan sistem pembayaran terintegrasi.
 
-🌍 **Live Demo:** [Link Vercel Frontend Lu, misal: https://kopianku-app.vercel.app]
-⚙️ **API Status:** [Link Render Backend Lu, misal: https://kopianku-api.onrender.com/docs]
+🌍 **Live Demo:** [Link Vercel: https://kopianku.vercel.app]
 
 ## ✨ Fitur Unggulan
 * **Smart Discover:** Cari kafe berdasarkan fasilitas (Wi-Fi, colokan, 24 Jam) dan jarak lokasi.
@@ -38,3 +37,8 @@ Jika ingin menjalankan aplikasi ini di komputer sendiri (tanpa live link), ikuti
    ```env
    NEXT_PUBLIC_API_URL=http://localhost:8000
    NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=SB-Mid-client-[KODE_CLIENT_KEY_ANDA]
+## 🔐 Akun Demo / Testing 
+Untuk menguji fitur dan melihat antarmuka Dashboard Admin / Pemilik Kafe, silakan gunakan kredensial berikut pada halaman Login:
+
+- **Email:** `roketto@gmail.com`
+- **Password:** `roketto123`
